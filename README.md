@@ -62,6 +62,22 @@ uv run scoreforge serve --host 0.0.0.0 --port 8000
 The web app queues submissions and processes **one job at a time**; the job
 page shows the stage, the queue position and an ETA.
 
+Submitting the same video twice while the result is still alive returns the
+existing job instead of transcribing it again - links that differ only in
+their shape (`youtu.be/ID`, `watch?v=ID`, `/shorts/ID`) are recognised as
+the same video.
+
+## Logging
+
+Everything from `DEBUG` to `CRITICAL` is logged to stdout. Choose the level
+with `SCOREFORGE_LOG_LEVEL`:
+
+```bash
+SCOREFORGE_LOG_LEVEL=DEBUG uv run scoreforge serve
+```
+
+Set `SCOREFORGE_LOG_FILE` to also write to a rotating log file.
+
 ## Docker
 
 ```bash
