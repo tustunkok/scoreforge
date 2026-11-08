@@ -4,7 +4,6 @@ packaging together. Both the CLI and the web app use it.
 
 from __future__ import annotations
 
-import logging
 import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -12,11 +11,12 @@ from pathlib import Path
 
 from .errors import ScoreForgeError
 from .jobs import DONE, EXPIRED, FAILED, Job, JobStore
+from .logging_setup import get_logger
 from .package import build_package
 from .pipeline import DEFAULT_MODEL, run_pipeline
 from .queue import JobQueue
 
-log = logging.getLogger("scoreforge.service")
+log = get_logger("service")
 
 #: How long a finished job's artifacts are kept (hours).
 RESULT_TTL_HOURS = 24
@@ -78,11 +78,28 @@ class ScoreForgeService:
 
     # -- public API ------------------------------------------------------- #
     def submit(self, url: str) -> Job:
-        """Validate and queue a job. Returns the queued job."""
+        """Validate and queue a job.
+
+        Submitting the same video again while a previous result is still
+        alive returns that job instead of starting the work again - the
+        result is identical, so recomputing it would only burn CPU.
+        """
+        from .jobs import canonical_video_id
         from .pipeline import validate_source
 
         url = validate_source(url)
-        return self.queue.submit(url)
+        video_id = canonical_video_id(url)
+        if video_id:
+            existing = self.store.find_by_video_id(video_id)
+            if existing is not None and existing.status != EXPIRED:
+                log.info(
+                    "reusing job %s for video %s (status=%s)",
+                    existing.id, video_id, existing.status,
+                )
+                return existing
+        job = self.queue.submit(url, video_id=video_id)
+        log.info("queued job %s for %s", job.id, url)
+        return job
 
     def get(self, job_id: str) -> Job | None:
         return self.store.get(job_id)
@@ -135,6 +152,10 @@ class ScoreForgeService:
             title=meta["title"],
             source=meta["source"],
             pages=[Path(p) for p in meta.get("pages", [])],
+        )
+        log.info(
+            "job %s packaged: %s (%.1f MB)",
+            job.id, archive.name, archive.stat().st_size / 1e6,
         )
         self.store.update(
             job.id,

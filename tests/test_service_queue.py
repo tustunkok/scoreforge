@@ -134,3 +134,32 @@ def _wait_for(service, job_id, status, timeout=20):
             return job
         time.sleep(0.05)
     raise AssertionError(f"job {job_id} never reached {status}")
+
+
+def test_the_same_link_twice_reuses_the_first_job(service):
+    """Idempotency: the same video must not be transcribed twice."""
+    first = service.submit("https://youtu.be/dQw4w9WgXcQ")
+    second = service.submit("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+    assert second.id == first.id
+
+
+def test_a_different_video_gets_its_own_job(service):
+    first = service.submit("https://youtu.be/dQw4w9WgXcQ")
+    second = service.submit("https://youtu.be/oHg5SJYRHA0")
+
+    assert second.id != first.id
+
+
+def test_an_expired_job_does_not_block_a_new_submission(service):
+    import threading
+
+    service.queue._handler.release = threading.Event()
+    first = service.submit("https://youtu.be/dQw4w9WgXcQ")
+    service.queue._handler.release.set()
+    _wait_for(service, first.id, "done")
+
+    service.store.update(first.id, status="expired")
+
+    second = service.submit("https://youtu.be/dQw4w9WgXcQ")
+    assert second.id != first.id

@@ -29,7 +29,10 @@ from .errors import (
     SourceUnavailableError,
     TranscriptionError,
 )
+from .logging_setup import get_logger
 from .musescore import find_musescore
+
+log = get_logger("pipeline")
 
 AUDIO_SR = 44100
 DEFAULT_MODEL = "Wayne42/DuET"
@@ -173,6 +176,7 @@ def ingest(
         if info.get("_type") == "playlist":
             raise InvalidSourceError("Please paste a link to a single video.")
         title = (info.get("title") or "untitled").strip()
+        log.info("downloading %r (%.1f min)", title, (info.get("duration") or 0) / 60)
         total = info.get("duration") or 0
         if total and total > MAX_DURATION_SECONDS:
             raise SourceTooLongError(
@@ -234,6 +238,7 @@ def transcribe(
         outdir = base.with_name(f"{base.name}_{n}")
         n += 1
 
+    log.info("transcribing %s with %s on %s", wav.name, model, device)
     duet_model = get_duet_model(device=device, model=model)
     audio_model = get_audio_model(device=device)
     try:

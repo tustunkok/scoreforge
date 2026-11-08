@@ -12,7 +12,6 @@ Design constraints:
 
 from __future__ import annotations
 
-import logging
 import threading
 import time
 from dataclasses import dataclass
@@ -21,8 +20,12 @@ from pathlib import Path
 
 from .errors import ScoreForgeError
 from .jobs import DONE, FAILED, QUEUED, RUNNING, Job, JobStore
+from .logging_setup import get_logger
 
-log = logging.getLogger("scoreforge.queue")
+log = get_logger("queue")
+
+log = get_logger("queue")
+
 
 #: Rough per-minute-of-audio processing times, used until we have real data.
 #: Filled in from measured runs; the ETA is only a hint.
@@ -86,8 +89,8 @@ class JobQueue:
             self._thread.join(timeout=timeout)
 
     # -- queue operations ------------------------------------------------- #
-    def submit(self, url: str) -> Job:
-        job = self.store.create(url)
+    def submit(self, url: str, *, video_id: str | None = None) -> Job:
+        job = self.store.create(url, video_id=video_id)
         self._wake.set()
         return job
 
@@ -139,6 +142,7 @@ class JobQueue:
                 self._wake.wait(timeout=1.0)
                 self._wake.clear()
                 continue
+            log.debug("picked up job %s", job.id)
             self._run_job(job)
 
     def _run_job(self, job: Job) -> None:
@@ -183,6 +187,7 @@ class JobQueue:
         payload = {"stage": stage, "progress": max(0, min(100, int(progress)))}
         payload.update(fields)
         self.store.update(job_id, **payload)
+        log.info("job %s: %s (%d%%)", job_id, stage, payload["progress"])
 
     def snapshot(self) -> dict:
         """A machine-readable view of the queue, for the web UI."""

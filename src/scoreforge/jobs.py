@@ -8,12 +8,14 @@ concurrent reads while one worker writes.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 QUEUED = "queued"
 RUNNING = "running"
@@ -23,10 +25,44 @@ EXPIRED = "expired"
 
 TERMINAL = {DONE, FAILED, EXPIRED}
 
+#: A YouTube video id is 11 characters of URL-safe base64.
+VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+
+def canonical_video_id(url: str) -> str | None:
+    """Extract the video id from any YouTube link shape.
+
+    ``https://youtu.be/ID``, ``https://www.youtube.com/watch?v=ID``,
+    ``https://www.youtube.com/shorts/ID``, ``.../embed/ID`` and
+    ``.../live/ID`` all yield the same id, which is what we use to recognise
+    a submission we have already processed.
+    """
+    if not url:
+        return None
+    parsed = urlparse(url if "://" in url else "https://" + url)
+    host = (parsed.hostname or "").lower()
+    if host in {"youtu.be", "www.youtu.be"}:
+        candidate = parsed.path.strip("/").split("/")[0]
+    elif host.endswith("youtube.com") or host.endswith("youtube-nocookie.com"):
+        query = parse_qs(parsed.query or "")
+        if "v" in query and query["v"]:
+            candidate = query["v"][0]
+        else:
+            parts = [p for p in parsed.path.split("/") if p]
+            if parts and parts[0] in {"shorts", "embed", "live", "v"} and len(parts) > 1:
+                candidate = parts[1]
+            else:
+                candidate = ""
+    else:
+        return None
+    return candidate if VIDEO_ID_RE.match(candidate or "") else None
+
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
     id           TEXT PRIMARY KEY,
     url          TEXT NOT NULL,
+    video_id     TEXT,
     title        TEXT,
     status       TEXT NOT NULL,
     stage        TEXT,
@@ -39,6 +75,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     position     INTEGER
 );
 CREATE INDEX IF NOT EXISTS jobs_status_created ON jobs(status, created_at);
+CREATE INDEX IF NOT EXISTS jobs_video_id ON jobs(video_id);
 """
 
 
@@ -51,6 +88,7 @@ class Job:
     id: str
     url: str
     status: str
+    video_id: str | None = None
     title: str | None = None
     stage: str | None = None
     progress: int = 0
@@ -73,6 +111,7 @@ class Job:
         return {
             "id": self.id,
             "url": self.url,
+            "video_id": self.video_id,
             "title": self.title,
             "status": self.status,
             "stage": self.stage,
@@ -97,7 +136,17 @@ class JobStore:
         self._conn.row_factory = sqlite3.Row
         with self._lock:
             self._conn.executescript(SCHEMA)
+            self._migrate()
             self._conn.commit()
+
+    def _migrate(self) -> None:
+        """Add columns that newer versions of ScoreForge introduced."""
+        columns = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(jobs)").fetchall()
+        }
+        if "video_id" not in columns:
+            self._conn.execute("ALTER TABLE jobs ADD COLUMN video_id TEXT")
 
     # -- helpers ---------------------------------------------------------- #
     def _row_to_job(self, row: sqlite3.Row) -> Job:
@@ -105,6 +154,7 @@ class JobStore:
             id=row["id"],
             url=row["url"],
             status=row["status"],
+            video_id=row["video_id"] if "video_id" in row.keys() else None,
             title=row["title"],
             stage=row["stage"],
             progress=row["progress"],
@@ -117,23 +167,34 @@ class JobStore:
         )
 
     # -- writes ----------------------------------------------------------- #
-    def create(self, url: str) -> Job:
+    def create(self, url: str, *, video_id: str | None = None) -> Job:
         job_id = uuid.uuid4().hex[:12]
         with self._lock:
             self._conn.execute(
-                "INSERT INTO jobs (id, url, status, progress, created_at) "
-                "VALUES (?, ?, ?, 0, ?)",
-                (job_id, url, QUEUED, _now()),
+                "INSERT INTO jobs (id, url, video_id, status, progress, created_at) "
+                "VALUES (?, ?, ?, ?, 0, ?)",
+                (job_id, url, video_id, QUEUED, _now()),
             )
             self._conn.commit()
         return self.get(job_id)  # type: ignore[return-value]
+
+    def find_by_video_id(self, video_id: str) -> Job | None:
+        """The most recent job for a video, whatever its state."""
+        if not video_id:
+            return None
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM jobs WHERE video_id = ? ORDER BY rowid DESC LIMIT 1",
+                (video_id,),
+            ).fetchone()
+        return self._row_to_job(row) if row else None
 
     def update(self, job_id: str, **fields) -> None:
         if not fields:
             return
         allowed = {
             "title", "status", "stage", "progress", "error", "started_at",
-            "finished_at", "artifacts", "position",
+            "finished_at", "artifacts", "position", "video_id",
         }
         unknown = set(fields) - allowed
         if unknown:

@@ -14,7 +14,6 @@ Routes
 
 from __future__ import annotations
 
-import logging
 import os
 import threading
 import time
@@ -27,9 +26,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from ..errors import InvalidSourceError, ScoreForgeError
+from ..logging_setup import get_logger, setup_logging
 from ..service import ScoreForgeService, Settings
 
-log = logging.getLogger("scoreforge.web")
+log = get_logger("web")
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
@@ -93,6 +93,7 @@ limiter = SlidingWindowLimiter(
 # app
 # --------------------------------------------------------------------------- #
 def create_app(service: ScoreForgeService | None = None) -> FastAPI:
+    setup_logging()
     app = FastAPI(
         title="ScoreForge",
         description="Turn a piano recording into engraved sheet music.",
@@ -112,6 +113,24 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
         svc = _service
         if svc is not None:
             svc.stop()
+
+    @app.middleware("http")
+    async def _log_requests(request: Request, call_next):
+        """Log every request with its status and duration."""
+        started = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            log.exception(
+                "%s %s failed", request.method, request.url.path
+            )
+            raise
+        duration_ms = (time.perf_counter() - started) * 1000
+        log.info(
+            "%s %s -> %d (%.0f ms)",
+            request.method, request.url.path, response.status_code, duration_ms,
+        )
+        return response
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request, svc: Annotated[ScoreForgeService, Depends(get_service)]):

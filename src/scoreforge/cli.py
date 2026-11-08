@@ -13,12 +13,17 @@ import shutil
 import sys
 from pathlib import Path
 
+from .logging_setup import get_logger, setup_logging
+
+log = get_logger("cli")
+
 
 def _cmd_convert(args: argparse.Namespace) -> int:
     from .errors import ScoreForgeError
     from .package import build_package
     from .pipeline import run_pipeline
 
+    log.info("converting %s into %s", args.url, args.out)
     out = Path(args.out)
     try:
         meta = run_pipeline(
@@ -54,7 +59,9 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
     from .web.app import create_app
 
+    setup_logging()
     app = create_app()
+    log.info("starting the web server on %s:%d", args.host, args.port)
     uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
     return 0
 
@@ -101,6 +108,12 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="scoreforge", description="Turn a piano recording into sheet music."
     )
+    ap.add_argument(
+        "--log-level",
+        default=None,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="how much to log (default: INFO, or $SCOREFORGE_LOG_LEVEL)",
+    )
     sub = ap.add_subparsers(dest="command", required=True)
 
     conv = sub.add_parser("convert", help="convert one YouTube link")
@@ -125,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
     doctor.set_defaults(func=_cmd_doctor)
 
     args = ap.parse_args(argv)
+    setup_logging(args.log_level)
     if args.command == "convert" and args.model is None:
         from .pipeline import DEFAULT_MODEL
 
