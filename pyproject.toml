@@ -1,0 +1,63 @@
+[project]
+name = "scoreforge"
+version = "0.1.0"
+description = "Turn a piano recording into engraved sheet music (PDF, MusicXML, MuseScore, MIDI)"
+readme = "README.md"
+authors = [
+    { name = "Tolga Üstünkök", email = "tolgaustunkok@gmail.com" }
+]
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["music", "transcription", "piano", "sheet-music", "musicxml", "midi"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "duet-score",
+    "mido>=1.3",
+    "ncls==0.0.68",
+    "pillow>=10.0",
+    "setuptools<82",
+    "soundfile>=0.14.0",
+    "transkun==2.0.1",
+    "yt-dlp>=2026.10.26",
+]
+
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.115",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.12",
+    "uvicorn[standard]>=0.30",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/tustunkok/scoreforge"
+Repository = "https://github.com/tustunkok/scoreforge"
+
+[project.scripts]
+scoreforge = "scoreforge:main"
+scoreforge-web = "scoreforge.web:main"
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+duet-score = { git = "https://github.com/wei-zeng98/DuET.git" }
+
+[tool.ruff]
+line-length = 90
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title or 'Your score' }} &mdash; ScoreForge{% endblock %}
+
+{% block content %}
+<section class="job-head">
+  <h1>{{ job.title or 'Your transcription' }}</h1>
+  <p class="muted">{{ job.url }}</p>
+  <p>
+    <span class="status {{ job.status }}">{{ job.status }}</span>
+    {% if job.stage %}<span class="muted"> &mdash; {{ job.stage }}</span>{% endif %}
+  </p>
+</section>
+
+<section class="progress-panel">
+  <div class="progress">
+    <div class="progress-bar" style="width: {{ job.progress }}%"></div>
+  </div>
+  <p class="muted">{{ job.progress }}%</p>
+
+  {% if job.status == 'queued' %}
+    <p>
+      You are <strong>position {{ job.queue_position }}</strong> in the queue.
+      {% if job.eta and job.eta.seconds %}
+      Estimated time: <strong>{{ (job.eta.seconds / 60) | round(1) }} minutes</strong>.
+      {% endif %}
+    </p>
+    <p class="muted">{{ job.eta.basis if job.eta else '' }}</p>
+  {% elif job.status == 'running' %}
+    <p>Your job is being transcribed right now. This page refreshes every 5 seconds.</p>
+    {% if job.eta and job.eta.seconds %}
+    <p class="muted">Roughly {{ (job.eta.seconds / 60) | round(1) }} minutes left.</p>
+    {% endif %}
+  {% elif job.status == 'done' %}
+    <p>
+      <a class="button" href="/download/{{ job.id }}">Download the score (zip)</a>
+      {% if job.artifacts and job.artifacts.size %}
+      <span class="muted">{{ (job.artifacts.size / 1048576) | round(1) }} MB</span>
+      {% endif %}
+    </p>
+    <img class="preview" src="/preview/{{ job.id }}" alt="First page of the score">
+  {% elif job.status == 'failed' %}
+    <p class="alert error">{{ job.error }}</p>
+  {% else %}
+    <p class="alert">This job has expired. Submit the link again.</p>
+  {% endif %}
+</section>
+
+<section class="queue-panel">
+  <h2>Queue</h2>
+  <div class="queue-counts">
+    <span class="badge queued">{{ queue.counts.queued }} waiting</span>
+    <span class="badge running">{{ queue.counts.running }} running</span>
+    <span class="badge done">{{ queue.counts.done }} done</span>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% if job.status in ('queued', 'running') %}
+<script>
+  setTimeout(function () { window.location.reload(); }, 5000);
+</script>
+{% endif %}
+{% endblock %}

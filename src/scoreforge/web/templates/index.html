@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}ScoreForge &mdash; piano video to sheet music{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>Turn a piano video into sheet music</h1>
+  <p class="lead">
+    Paste a public YouTube link. ScoreForge listens, transcribes and engraves
+    a piano score you can print, edit in MuseScore, or play back as MIDI.
+  </p>
+
+  <form method="post" action="/submit" class="submit-form">
+    <label class="visually-hidden" for="url">YouTube link</label>
+    <input id="url" name="url" type="text" required
+           placeholder="https://www.youtube.com/watch?v=..."
+           autocomplete="off" spellcheck="false">
+    <button type="submit">Transcribe</button>
+  </form>
+
+  {% if error %}
+  <p class="alert error">{{ error }}</p>
+  {% endif %}
+
+  <ul class="facts">
+    <li>PDF, MusicXML, MuseScore file, MIDI and page images</li>
+    <li>One job at a time &mdash; a visible queue with an ETA</li>
+    <li>Results are kept for 24 hours</li>
+  </ul>
+</section>
+
+<section class="queue-panel">
+  <h2>Queue</h2>
+  {% set c = queue.counts %}
+  <div class="queue-counts">
+    <span class="badge queued">{{ c.queued }} waiting</span>
+    <span class="badge running">{{ c.running }} running</span>
+    <span class="badge done">{{ c.done }} done</span>
+    <span class="badge failed">{{ c.failed }} failed</span>
+  </div>
+
+  {% if queue.current %}
+  <p class="current">
+    Working on
+    <strong>{{ queue.current.title or queue.current.url }}</strong>
+    &mdash; {{ queue.current.stage }} ({{ queue.current.progress }}%)
+  </p>
+  {% endif %}
+
+  {% if queue.queued %}
+  <ol class="queue-list">
+    {% for j in queue.queued %}
+    <li><a href="/job/{{ j.id }}">{{ j.title or j.url }}</a>
+        <span class="muted">submitted {{ j.created_at }}</span></li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted">The queue is empty.</p>
+  {% endif %}
+</section>
+
+{% if jobs %}
+<section class="recent">
+  <h2>Recent jobs</h2>
+  <table class="jobs">
+    <thead>
+      <tr><th>Title</th><th>Status</th><th>Stage</th><th>Submitted</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for j in jobs %}
+      <tr>
+        <td><a href="/job/{{ j.id }}">{{ j.title or j.url }}</a></td>
+        <td><span class="status {{ j.status }}">{{ j.status }}</span></td>
+        <td>{{ j.stage or "-" }}</td>
+        <td class="muted">{{ j.created_at }}</td>
+        <td>
+          {% if j.status == 'done' %}
+          <a class="button small" href="/download/{{ j.id }}">Download</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ScoreForge{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="/">
+    <span class="brand-mark">&#9834;</span> ScoreForge
+  </a>
+  <span class="tagline">piano recordings &rarr; engraved sheet music</span>
+</header>
+
+<main>
+{% block content %}{% endblock %}
+</main>
+
+<footer class="site-footer">
+  <p>
+    ScoreForge is open source and free for personal, non-commercial use.
+    Output is a machine-generated first draft &mdash; please review it.
+  </p>
+</footer>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>
