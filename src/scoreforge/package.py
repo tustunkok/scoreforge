@@ -71,6 +71,7 @@ def make_preview(
         from PIL import Image
     except ImportError:  # Pillow is optional
         return None
+    Image.MAX_IMAGE_PIXELS = None
     try:
         with Image.open(pages[0]) as img:
             img = img.convert("RGB")
@@ -80,6 +81,38 @@ def make_preview(
     except Exception:
         return None
     return destination
+
+
+#: Page images are rendered at print resolution; that is far more than a
+#: screen needs. We downscale them to keep the archive a sane size.
+PAGE_MAX_WIDTH = 1700
+
+
+def make_page_images(pages: list[Path], out_dir: Path) -> list[Path]:
+    """Downscale the rendered pages so the archive stays small."""
+    if not pages:
+        return []
+    try:
+        from PIL import Image
+    except ImportError:
+        return list(pages)
+
+    Image.MAX_IMAGE_PIXELS = None
+    out_dir.mkdir(parents=True, exist_ok=True)
+    results: list[Path] = []
+    for index, page in enumerate(pages, start=1):
+        target = out_dir / f"page-{index}.png"
+        try:
+            with Image.open(page) as img:
+                img = img.convert("RGB")
+                if img.width > PAGE_MAX_WIDTH:
+                    height = round(img.height * PAGE_MAX_WIDTH / img.width)
+                    img = img.resize((PAGE_MAX_WIDTH, height), Image.LANCZOS)
+                img.save(target, "PNG", optimize=True)
+            results.append(target)
+        except Exception:
+            results.append(page)
+    return results
 
 
 def build_package(
@@ -113,7 +146,8 @@ def build_package(
                 zf.write(path, name)
 
         page_names = []
-        for index, page in enumerate(pages, start=1):
+        scaled = make_page_images(pages, out_dir / "pages")
+        for index, page in enumerate(scaled, start=1):
             arcname = f"pages/page-{index}.png"
             zf.write(page, arcname)
             page_names.append(arcname)
