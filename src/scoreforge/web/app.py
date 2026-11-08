@@ -19,6 +19,7 @@ import os
 import threading
 import time
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -113,7 +114,7 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
             svc.stop()
 
     @app.get("/", response_class=HTMLResponse)
-    def index(request: Request, svc: ScoreForgeService = Depends(get_service)):
+    def index(request: Request, svc: Annotated[ScoreForgeService, Depends(get_service)]):
         return templates.TemplateResponse(
             request,
             "index.html",
@@ -127,8 +128,8 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
     @app.post("/submit")
     def submit(
         request: Request,
-        url: str = Form(...),
-        svc: ScoreForgeService = Depends(get_service),
+        url: Annotated[str, Form()],
+        svc: Annotated[ScoreForgeService, Depends(get_service)],
     ):
         client = request.client.host if request.client else "unknown"
         if not limiter.allow(client):
@@ -173,7 +174,9 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
 
     @app.get("/job/{job_id}", response_class=HTMLResponse)
     def job_page(
-        request: Request, job_id: str, svc: ScoreForgeService = Depends(get_service)
+        request: Request,
+        job_id: str,
+        svc: Annotated[ScoreForgeService, Depends(get_service)],
     ):
         status = svc.status(job_id)
         if status.get("error") == "not_found":
@@ -184,7 +187,8 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
 
     @app.get("/download/{job_id}")
     def download(
-        job_id: str, svc: ScoreForgeService = Depends(get_service)
+        job_id: str,
+        svc: Annotated[ScoreForgeService, Depends(get_service)],
     ):
         path = svc.artifact_path(job_id, "scoreforge.zip")
         if path is None:
@@ -194,18 +198,18 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
         return FileResponse(path, filename=path.name, media_type="application/zip")
 
     @app.get("/preview/{job_id}")
-    def preview(job_id: str, svc: ScoreForgeService = Depends(get_service)):
+    def preview(job_id: str, svc: Annotated[ScoreForgeService, Depends(get_service)]):
         path = svc.artifact_path(job_id, "preview.jpg")
         if path is None:
             raise HTTPException(status_code=404, detail="No preview available")
         return FileResponse(path, media_type="image/jpeg")
 
     @app.get("/api/jobs")
-    def api_jobs(svc: ScoreForgeService = Depends(get_service)):
+    def api_jobs(svc: Annotated[ScoreForgeService, Depends(get_service)]):
         return JSONResponse(svc.queue_snapshot())
 
     @app.get("/api/job/{job_id}")
-    def api_job(job_id: str, svc: ScoreForgeService = Depends(get_service)):
+    def api_job(job_id: str, svc: Annotated[ScoreForgeService, Depends(get_service)]):
         status = svc.status(job_id)
         if status.get("error") == "not_found":
             raise HTTPException(status_code=404, detail="Job not found")

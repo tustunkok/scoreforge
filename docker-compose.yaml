@@ -1,0 +1,27 @@
+services:
+  scoreforge:
+    build: .
+    image: ghcr.io/tustunkok/scoreforge:latest
+    container_name: scoreforge
+    restart: unless-stopped
+    ports:
+      - "8766:8000"
+    volumes:
+      - scoreforge-data:/data
+    environment:
+      SCOREFORGE_DATA_DIR: /data
+      SCOREFORGE_DEVICE: cpu
+      SCOREFORGE_RATE_LIMIT: "5"
+      SCOREFORGE_RATE_WINDOW: "3600"
+      SCOREFORGE_RESULT_TTL_HOURS: "24"
+      # Uncomment if MuseScore is not on the default path:
+      # SCOREFORGE_MUSESCORE: /usr/local/bin/mscore
+    # The transcription is CPU heavy; give it room but do not starve the host.
+    deploy:
+      resources:
+        limits:
+          cpus: "8.0"
+          memory: 8G
+
+volumes:
+  scoreforge-data:

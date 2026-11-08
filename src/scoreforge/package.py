@@ -58,7 +58,12 @@ def slugify(title: str, *, max_length: int = 60) -> str:
     return (slug[:max_length].strip("-")) or "score"
 
 
-def make_preview(pages: list[Path], destination: Path, *, size: tuple[int, int] = (1200, 1200)) -> Path | None:
+def make_preview(
+    pages: list[Path],
+    destination: Path,
+    *,
+    size: tuple[int, int] = (1200, 1200),
+) -> Path | None:
     """Build a JPEG cover from the first rendered page."""
     if not pages:
         return None

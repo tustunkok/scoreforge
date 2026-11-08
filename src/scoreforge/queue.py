@@ -112,13 +112,13 @@ class JobQueue:
             per_job * ahead,
             f"~{per_job / 60:.1f} min per job, {ahead} job(s) ahead",
         )
-
     def _remaining_for_running(self, job: Job) -> float | None:
         started = job.started_at
         if not started:
             return None
         try:
-            elapsed = (datetime.now(UTC) - datetime.fromisoformat(started)).total_seconds()
+            now = datetime.now(UTC)
+            elapsed = (now - datetime.fromisoformat(started)).total_seconds()
         except Exception:
             elapsed = 0.0
         per_job = self._average_job_seconds()

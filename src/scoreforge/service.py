@@ -35,7 +35,7 @@ class Settings:
     max_duration_seconds: int = 30 * 60
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         import os
 
         data_dir = Path(os.environ.get("SCOREFORGE_DATA_DIR", "data"))
