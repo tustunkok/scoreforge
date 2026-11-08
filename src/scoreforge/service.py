@@ -98,9 +98,7 @@ class ScoreForgeService:
         eta = self.queue.eta_for(job_id)
         payload = job.as_dict()
         payload["eta"] = eta.as_dict()
-        payload["queue_position"] = (
-            self.store.queue_position(job_id) if job.status == "queued" else None
-        )
+        payload["queue_position"] = self.store.queue_position(job_id)
         return payload
 
     def artifact_path(self, job_id: str, name: str) -> Path | None:

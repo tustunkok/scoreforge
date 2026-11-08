@@ -193,10 +193,19 @@ class JobStore:
             return cur.rowcount
 
     def queue_position(self, job_id: str) -> int | None:
-        """1-based position of a queued job, or ``None`` if not queued."""
-        jobs = self.queued_jobs()
-        for index, job in enumerate(jobs, start=1):
-            if job.id == job_id:
+        """1-based position in the waiting line, or ``None`` if not waiting.
+
+        The job currently being processed counts as position 1, so a user
+        always sees how far away they are.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id FROM jobs WHERE status IN (?, ?) "
+                "ORDER BY CASE status WHEN ? THEN 0 ELSE 1 END, rowid ASC",
+                (QUEUED, RUNNING, RUNNING),
+            ).fetchall()
+        for index, row in enumerate(rows, start=1):
+            if row["id"] == job_id:
                 return index
         return None
 
