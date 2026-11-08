@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
@@ -57,9 +59,6 @@ class SlidingWindowLimiter:
     """In-memory sliding-window rate limiter, per client address."""
 
     def __init__(self, limit: int = 5, window_seconds: float = 3600.0) -> None:
-        import threading
-        import time
-
         self.limit = limit
         self.window = window_seconds
         self._hits: dict[str, list[float]] = {}

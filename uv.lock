@@ -2360,6 +2360,11 @@ web = [
     { name = "uvicorn", extra = ["standard"] },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "httpx" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "duet-score", git = "https://github.com/wei-zeng98/DuET.git" },
@@ -2378,6 +2383,9 @@ requires-dist = [
     { name = "yt-dlp", specifier = ">=2026.10.26" },
 ]
 provides-extras = ["web", "dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "httpx", specifier = ">=0.28.1" }]
 
 [[package]]
 name = "seaborn"
