@@ -26,11 +26,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libfontconfig1 \
         libx11-6 \
         libxcb1 \
+        libxcb-cursor0 \
         libxkbcommon0 \
         libasound2 \
         libdbus-1-3 \
+        xvfb \
+        xauth \
         fonts-dejavu \
         fonts-liberation \
+        fonts-freefont-ttf \
     && rm -rf /var/lib/apt/lists/*
 
 # --- uv ------------------------------------------------------------------- #
@@ -49,14 +53,24 @@ RUN mkdir -p /opt/musescore \
     && cd /opt/musescore \
     && /tmp/musescore.AppImage --appimage-extract > /dev/null \
     && rm -f /tmp/musescore.AppImage \
-    && ln -sf /opt/musescore/squashfs-root/usr/bin/musescore-portable /usr/local/bin/mscore \
-    && chmod +x /opt/musescore/squashfs-root/usr/bin/musescore-portable \
-    && ln -sf /opt/musescore/squashfs-root/usr/bin/musescore-portable /usr/local/bin/musescore \
-    && ln -sf /opt/musescore/squashfs-root/usr/bin/musescore-portable /usr/local/bin/musescore4
+    && chmod +x /opt/musescore/squashfs-root/AppRun \
+        /opt/musescore/squashfs-root/bin/mscore4portable \
+    && printf '%s\n' \
+        '#!/bin/sh' \
+        '# MuseScore 4 needs a display; a virtual one is enough.' \
+        'export APPDIR=/opt/musescore/squashfs-root' \
+        'export QT_PLUGIN_PATH=$APPDIR/plugins' \
+        'export LD_LIBRARY_PATH=$APPDIR/lib:$LD_LIBRARY_PATH' \
+        'exec xvfb-run -a --server-args="-screen 0 1600x1200x24" $APPDIR/AppRun "$@"' \
+        > /usr/local/bin/mscore \
+    && chmod +x /usr/local/bin/mscore \
+    && ln -sf /usr/local/bin/mscore /usr/local/bin/musescore \
+    && ln -sf /usr/local/bin/mscore /usr/local/bin/musescore-portable \
+    && ln -sf /usr/local/bin/mscore /usr/local/bin/musescore4 \
+    && ln -sf /usr/local/bin/mscore /usr/local/bin/mscore4portable
 
 ENV SCOREFORGE_MUSESCORE=/usr/local/bin/mscore
-ENV QT_QPA_PLATFORM=offscreen
-ENV LD_LIBRARY_PATH=/opt/musescore/squashfs-root/usr/lib
+ENV MUSESCORE_HOME=/opt/musescore
 
 # --- python dependencies -------------------------------------------------- #
 COPY pyproject.toml uv.lock README.md ./
