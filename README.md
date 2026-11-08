@@ -80,12 +80,25 @@ Set `SCOREFORGE_LOG_FILE` to also write to a rotating log file.
 
 ## Docker
 
+The image is published to `ghcr.io/tustunkok/scoreforge` on every push to
+`master`:
+
 ```bash
-docker compose up -d
+docker compose pull && docker compose up -d
 ```
 
-The image bundles ffmpeg and MuseScore 4; model weights are cached in a
-volume so restarts are fast.
+or build it yourself:
+
+```bash
+docker compose build
+```
+
+The image bundles ffmpeg and MuseScore 4; model weights are baked in so
+restarts are fast. The container listens on port **8766**.
+
+```bash
+curl http://localhost:8766/healthz
+```
 
 ## Licensing
 
