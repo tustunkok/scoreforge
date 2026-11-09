@@ -63,9 +63,16 @@ def test_job_page_shows_the_progress_and_the_queue(client):
     )
 
     assert response.status_code == 200
-    # Either the job is waiting (we show its place in the line) or it is
-    # already being worked on - both states must be visible on the page.
-    assert "position" in response.text or "transcribe" in response.text
+    # The queue panel is always visible, and the job carries a status.
+    assert "waiting" in response.text
+    assert 'class="status' in response.text
+    # Whichever state the worker reached, the page explains it.
+    assert (
+        "position" in response.text
+        or "being transcribed" in response.text
+        or "Download the score" in response.text
+        or "alert" in response.text
+    )
 
 
 def test_job_status_is_available_as_json(client):
