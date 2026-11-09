@@ -22,6 +22,7 @@ dependencies = [
     "setuptools<82",
     "soundfile>=0.14.0",
     "torch>=2.9,<2.10",
+    "torchaudio>=2.9,<2.10",
     "transkun==2.0.1",
     "yt-dlp>=2026.10.26",
 ]
@@ -55,6 +56,7 @@ duet-score = { git = "https://github.com/wei-zeng98/DuET.git" }
 # CPU-only wheels: the default Linux wheels pull the whole CUDA stack
 # (~3 GB) and blow up CI runners and small images.
 torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
