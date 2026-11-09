@@ -25,10 +25,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxext6 \
         libxrender1 \
         libfontconfig1 \
+        libfreetype6 \
         libx11-6 \
+        libx11-xcb1 \
         libxcb1 \
         libxcb-cursor0 \
+        libxcb-glx0 \
+        libxcb-shm0 \
+        libxcb-render0 \
+        libxcb-randr0 \
+        libxcb-shape0 \
+        libxcb-xfixes0 \
+        libxcb-sync1 \
+        libxcb-image0 \
+        libxcb-keysyms1 \
+        libxcb-icccm4 \
+        libxcb-util1 \
         libxkbcommon0 \
+        libegl1 \
+        libgl1 \
+        libgles2 \
+        libglu1-mesa \
         libasound2 \
         libdbus-1-3 \
         xvfb \
