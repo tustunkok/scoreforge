@@ -3,50 +3,56 @@
 
 {% block content %}
 <section class="job-head">
+  <p class="eyebrow">Your transcription</p>
   <h1>{{ job.title or 'Your transcription' }}</h1>
-  <p class="muted">{{ job.url }}</p>
-  <p>
+  <p class="source-url">{{ job.url }}</p>
+  <p class="job-meta">
     <span class="status {{ job.status }}">{{ job.status }}</span>
-    {% if job.stage %}<span class="muted"> &mdash; {{ job.stage }}</span>{% endif %}
+    {% if job.stage and job.stage != job.status %}<span class="muted">{{ job.stage }}</span>{% endif %}
   </p>
 </section>
 
-<section class="progress-panel">
+<section class="panel progress-panel">
   <div class="progress">
     <div class="progress-bar" style="width: {{ job.progress }}%"></div>
   </div>
-  <p class="muted">{{ job.progress }}%</p>
+  <p class="progress-value">{{ job.progress }}<span>%</span></p>
 
   {% if job.status == 'queued' %}
-    <p>
-      You are <strong>position {{ job.queue_position }}</strong> in the queue.
-      {% if job.eta and job.eta.seconds %}
-      Estimated time: <strong>{{ (job.eta.seconds / 60) | round(1) }} minutes</strong>.
-      {% endif %}
+    <p class="message">
+      You are <strong>position {{ job.queue_position }}</strong> in the queue.{% if job.eta and job.eta.seconds %}
+      Estimated wait: <strong>{{ (job.eta.seconds / 60) | round(1) }} minutes</strong>.{% endif %}
     </p>
     <p class="muted">{{ job.eta.basis if job.eta else '' }}</p>
   {% elif job.status == 'running' %}
-    <p>Your job is being transcribed right now. This page refreshes every 5 seconds.</p>
+    <p class="message">Being transcribed right now &mdash; this page refreshes every 5 seconds.</p>
     {% if job.eta and job.eta.seconds %}
     <p class="muted">Roughly {{ (job.eta.seconds / 60) | round(1) }} minutes left.</p>
     {% endif %}
   {% elif job.status == 'done' %}
-    <p>
-      <a class="button" href="/download/{{ job.id }}">Download the score (zip)</a>
-      {% if job.artifacts and job.artifacts.size %}
-      <span class="muted">{{ (job.artifacts.size / 1048576) | round(1) }} MB</span>
-      {% endif %}
+    <p class="message">
+      <a class="button" href="/download/{{ job.id }}">
+        Download the score
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="btn-arrow">
+          <path d="M12 4v11M6.5 10.5L12 16l5.5-5.5M5 19h14" fill="none"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                stroke-linejoin="round"/>
+        </svg>
+      </a>{% if job.artifacts and job.artifacts.size %}<span class="muted zip-size">{{ (job.artifacts.size / 1048576) | round(1) }} MB &middot; zip</span>{% endif %}
     </p>
-    <img class="preview" src="/preview/{{ job.id }}" alt="First page of the score">
+    <img class="preview" src="/preview/{{ job.id }}" alt="First page of the engraving">
   {% elif job.status == 'failed' %}
-    <p class="alert error">{{ job.error }}</p>
+    <p class="alert error" role="alert">{{ job.error }}</p>
   {% else %}
     <p class="alert">This job has expired. Submit the link again.</p>
   {% endif %}
 </section>
 
-<section class="queue-panel">
-  <h2>Queue</h2>
+<section class="panel queue-panel">
+  <div class="panel-head">
+    <h2>Queue</h2>
+    <span class="live-dot" aria-hidden="true"></span>
+  </div>
   <div class="queue-counts">
     <span class="badge queued">{{ queue.counts.queued }} waiting</span>
     <span class="badge running">{{ queue.counts.running }} running</span>

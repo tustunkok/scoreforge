@@ -3,33 +3,50 @@
 
 {% block content %}
 <section class="hero">
-  <h1>Turn a piano video into sheet music</h1>
+  <h1>Turn a piano video<br>into sheet music</h1>
   <p class="lead">
     Paste a public YouTube link. ScoreForge listens, transcribes and engraves
-    a piano score you can print, edit in MuseScore, or play back as MIDI.
+    a score you can print, edit in MuseScore, or play back as MIDI.
   </p>
 
   <form method="post" action="/submit" class="submit-form">
     <label class="visually-hidden" for="url">YouTube link</label>
-    <input id="url" name="url" type="text" required
-           placeholder="https://www.youtube.com/watch?v=..."
-           autocomplete="off" spellcheck="false">
-    <button type="submit">Transcribe</button>
+    <div class="field">
+      <svg class="field-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 5h16v14H4z" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M10 9.5l5 2.5-5 2.5z" fill="currentColor"/>
+      </svg>
+      <input id="url" name="url" type="text" required
+             placeholder="https://www.youtube.com/watch?v=..."
+             autocomplete="off" spellcheck="false" autocapitalize="off">
+      <button type="submit">
+        Transcribe
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="btn-arrow">
+          <path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+    <p class="field-hint">Accepts <code>youtu.be/&hellip;</code> and
+      <code>youtube.com/watch?v=&hellip;</code> links only.</p>
   </form>
 
   {% if error %}
-  <p class="alert error">{{ error }}</p>
+  <p class="alert error" role="alert">{{ error }}</p>
   {% endif %}
 
   <ul class="facts">
-    <li>PDF, MusicXML, MuseScore file, MIDI and page images</li>
-    <li>One job at a time &mdash; a visible queue with an ETA</li>
-    <li>Results are kept for 24 hours</li>
+    <li>PDF, MusicXML, MIDI &amp; page images</li>
+    <li>One job at a time, with a queue and ETA</li>
+    <li>Results kept for 24 hours</li>
   </ul>
 </section>
 
-<section class="queue-panel">
-  <h2>Queue</h2>
+<section class="panel queue-panel">
+  <div class="panel-head">
+    <h2>Queue</h2>
+    <span class="live-dot" aria-hidden="true"></span>
+  </div>
   {% set c = queue.counts %}
   <div class="queue-counts">
     <span class="badge queued">{{ c.queued }} waiting</span>
@@ -40,9 +57,9 @@
 
   {% if queue.current %}
   <p class="current">
-    Working on
+    <span class="muted">Working on</span>
     <strong>{{ queue.current.title or queue.current.url }}</strong>
-    &mdash; {{ queue.current.stage }} ({{ queue.current.progress }}%)
+    <span class="muted">{{ queue.current.stage }} &middot; {{ queue.current.progress }}%</span>
   </p>
   {% endif %}
 
@@ -50,17 +67,19 @@
   <ol class="queue-list">
     {% for j in queue.queued %}
     <li><a href="/job/{{ j.id }}">{{ j.title or j.url }}</a>
-        <span class="muted">submitted {{ j.created_at }}</span></li>
+        <span class="muted">{{ j.created_at }}</span></li>
     {% endfor %}
   </ol>
   {% else %}
-  <p class="muted">The queue is empty.</p>
+  <p class="muted empty">Nothing waiting &mdash; the queue is empty.</p>
   {% endif %}
 </section>
 
 {% if jobs %}
-<section class="recent">
-  <h2>Recent jobs</h2>
+<section class="panel recent">
+  <div class="panel-head">
+    <h2>Recent jobs</h2>
+  </div>
   <table class="jobs">
     <thead>
       <tr><th>Title</th><th>Status</th><th>Stage</th><th>Submitted</th><th></th></tr>
@@ -68,11 +87,11 @@
     <tbody>
       {% for j in jobs %}
       <tr>
-        <td><a href="/job/{{ j.id }}">{{ j.title or j.url }}</a></td>
+        <td class="cell-title"><a href="/job/{{ j.id }}">{{ j.title or j.url }}</a></td>
         <td><span class="status {{ j.status }}">{{ j.status }}</span></td>
-        <td>{{ j.stage or "-" }}</td>
-        <td class="muted">{{ j.created_at }}</td>
-        <td>
+        <td class="muted">{{ j.stage or "-" }}</td>
+        <td class="muted nowrap">{{ j.created_at }}</td>
+        <td class="cell-action">
           {% if j.status == 'done' %}
           <a class="button small" href="/download/{{ j.id }}">Download</a>
           {% endif %}

@@ -3,27 +3,45 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#07090e">
   <title>{% block title %}ScoreForge{% endblock %}</title>
+  <link rel="preload" as="image" href="/static/ambient-poster.jpg">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header class="site-header">
-  <a class="brand" href="/">
-    <span class="brand-mark">&#9834;</span> ScoreForge
-  </a>
-  <span class="tagline">piano recordings &rarr; engraved sheet music</span>
-</header>
+<div class="backdrop" aria-hidden="true">
+  <video class="backdrop-video" autoplay muted loop playsinline
+         poster="/static/ambient-poster.jpg" tabindex="-1">
+    <source src="/static/ambient.mp4" type="video/mp4">
+  </video>
+  <div class="backdrop-veil"></div>
+</div>
 
-<main>
-{% block content %}{% endblock %}
-</main>
+<a class="skip-link" href="#main">Skip to content</a>
 
-<footer class="site-footer">
-  <p>
-    ScoreForge is open source and free for personal, non-commercial use.
-    Output is a machine-generated first draft &mdash; please review it.
-  </p>
-</footer>
+<div class="shell">
+  <header class="site-header">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+      </span>
+      <span class="brand-name">ScoreForge</span>
+    </a>
+    <span class="tagline">piano video &rarr; engraved score</span>
+  </header>
+
+  <main id="main">
+  {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <p>
+      Open source, free for personal non-commercial use. Output is a
+      machine-generated first draft &mdash; please review it before playing.
+    </p>
+  </footer>
+</div>
 
 {% block scripts %}{% endblock %}
 </body>

@@ -67,11 +67,14 @@ def test_job_page_shows_the_progress_and_the_queue(client):
     assert "waiting" in response.text
     assert 'class="status' in response.text
     # Whichever state the worker reached, the page explains it.
-    assert (
-        "position" in response.text
-        or "being transcribed" in response.text
-        or "Download the score" in response.text
-        or "alert" in response.text
+    explained = [
+        "position",
+        "transcribed",
+        "Download the score",
+        "alert",
+    ]
+    assert any(text in response.text.lower() for text in explained), (
+        "the job page never explains the job's state"
     )
 
 
