@@ -105,4 +105,7 @@ def test_queue_endpoint_reports_counts(client):
 
 
 def test_healthz_is_ok(client):
-    assert client.get("/healthz").json() == {"status": "ok"}
+    payload = client.get("/healthz").json()
+
+    assert payload["status"] == "ok"
+    assert payload["version"]

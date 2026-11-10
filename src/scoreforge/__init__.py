@@ -30,7 +30,12 @@ from .pipeline import DEFAULT_MODEL, run_pipeline, validate_source
 from .queue import JobQueue
 from .service import ScoreForgeService, Settings
 
-__version__ = "0.1.0"
+#: The single source of truth for the released version.
+#:
+#: Releases follow `Semantic Versioning <https://semver.org/>`_. The value is
+#: kept in step with ``pyproject.toml`` by ``uv version --bump`` and a test
+#: (``tests/test_version.py``) fails the build if the two ever drift apart.
+__version__ = "1.0.0"
 
 __all__ = [
     "ScoreForgeService",

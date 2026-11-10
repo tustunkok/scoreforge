@@ -13,6 +13,7 @@ import shutil
 import sys
 from pathlib import Path
 
+from . import __version__
 from .logging_setup import get_logger, setup_logging
 
 log = get_logger("cli")
@@ -71,7 +72,7 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 def _cmd_doctor(args: argparse.Namespace) -> int:
     """Report whether everything the pipeline needs is available."""
     ok = True
-    print("ScoreForge environment check")
+    print(f"ScoreForge {__version__} environment check")
     print("-" * 40)
 
     for tool in ("ffmpeg", "yt-dlp"):
@@ -109,6 +110,12 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="scoreforge", description="Turn a piano recording into sheet music."
+    )
+    ap.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="print the version and exit",
     )
     ap.add_argument(
         "--log-level",

@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from .. import __version__
 from ..abuse import rejections
 from ..errors import InvalidSourceError, ScoreForgeError, StorageFullError
 from ..logging_setup import get_logger, setup_logging
@@ -90,7 +91,7 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
     app = FastAPI(
         title="ScoreForge",
         description="Turn a piano recording into engraved sheet music.",
-        version="0.1.0",
+        version=__version__,
     )
     if service is not None:
         global _service
@@ -262,7 +263,7 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
 
     @app.get("/healthz")
     def healthz():
-        return {"status": "ok"}
+        return {"status": "ok", "version": __version__}
 
     return app
 
