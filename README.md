@@ -100,6 +100,35 @@ restarts are fast. The container listens on port **8766**.
 curl http://localhost:8766/healthz
 ```
 
+## Running it publicly
+
+The service has no accounts, so the input path is deliberately narrow. Only
+two link shapes are accepted:
+
+```
+https://youtu.be/ZOaFiTStPt4
+https://www.youtube.com/watch?v=ZOaFiTStPt4
+```
+
+Everything else - other hosts, `http://`, Shorts, playlists, extra query
+parameters, private or live videos - is rejected and the raw input is written
+to the `scoreforge.abuse` log (one line per client per minute, so a hostile
+client cannot flood the log).
+
+The public build also:
+
+* limits request bodies to 2 KB and refuses cross-site form posts;
+* rate-limits submissions per client address and caps the queue depth;
+* refuses new work when the data volume is low on space, and deletes results
+  after `SCOREFORGE_RESULT_TTL_HOURS`;
+* runs as UID 10001 with a read-only root filesystem, no capabilities and
+  `no-new-privileges`.
+
+Set `SCOREFORGE_TRUST_PROXY=1` **only** when a reverse proxy sets
+`X-Forwarded-For`; otherwise the header is ignored and every client looks like
+the proxy. Set `SCOREFORGE_ALLOWED_HOSTS` to your domain so that a poisoned
+`Host` header cannot be used against you.
+
 ## Licensing
 
 * ScoreForge's own code: **MIT**.
