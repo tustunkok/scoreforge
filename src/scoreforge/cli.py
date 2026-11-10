@@ -36,6 +36,8 @@ def _cmd_convert(args: argparse.Namespace) -> int:
             duration=args.duration,
             skip_png=args.no_png,
             model=args.model,
+            # The CLI is the only caller allowed to name a local file.
+            allow_local=True,
             progress=(lambda s, p: print(f"[{p:3d}%] {s}", flush=True)),
         )
     except ScoreForgeError as exc:

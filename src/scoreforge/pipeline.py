@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,6 +29,7 @@ from .errors import (
     InvalidSourceError,
     SourceTooLongError,
     SourceUnavailableError,
+    TimeoutError_,
     TranscriptionError,
 )
 from .logging_setup import get_logger
@@ -40,6 +42,31 @@ DEFAULT_MODEL = "Wayne42/DuET"
 
 #: Videos longer than this are rejected (seconds).
 MAX_DURATION_SECONDS = 30 * 60
+
+#: Hard ceiling for a single audio download (bytes). A 30 minute stream is far
+#: below this; the limit only exists so a hostile source cannot fill the disk.
+MAX_DOWNLOAD_BYTES = 200 * 1024 * 1024
+
+#: Wall-clock ceilings for the external tools (seconds).
+DOWNLOAD_TIMEOUT = 20 * 60
+FFMPEG_TIMEOUT = 5 * 60
+
+#: Total time a single job may take before the pipeline gives up (seconds).
+MAX_JOB_SECONDS = 60 * 60
+
+#: A YouTube video id, as reported by yt-dlp metadata.
+VIDEO_ID_RE = re.compile(r"[A-Za-z0-9_-]{11}")
+
+#: yt-dlp options for every metadata call: no config file, no shelling out,
+#: no network retries beyond a small budget.
+YTDLP_OPTIONS = {
+    "quiet": True,
+    "no_warnings": True,
+    "ignoreconfig": True,
+    "noplaylist": True,
+    "socket_timeout": 20,
+    "retries": 1,
+}
 
 ProgressFn = Callable[[str, int], None]
 
@@ -155,44 +182,123 @@ def ingest(
     keep_audio: bool = True,
     start: float | None = None,
     duration: float | None = None,
+    allow_local: bool = False,
 ) -> tuple[Path, str]:
-    """Return (wav_path, title). ``source`` is a URL or a local media file."""
+    """Return (wav_path, title) for a URL or (opt-in) a local media file.
+
+    ``allow_local`` is off by default: the public service must never resolve
+    a submitted string against the server filesystem.
+    """
     workdir.mkdir(parents=True, exist_ok=True)
+    if allow_local and source and Path(source).exists():
+        return ingest_file(source, workdir, keep_audio=keep_audio,
+                           start=start, duration=duration)
+    return ingest_url(source, workdir, keep_audio=keep_audio,
+                      start=start, duration=duration)
 
-    if Path(source).exists():
-        raw = Path(source)
-        title = raw.stem
-    else:
-        import yt_dlp
 
-        url = validate_source(source)
-        try:
-            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
-                info = ydl.extract_info(url, download=False)
-        except Exception as exc:
-            raise SourceUnavailableError(
-                "That video could not be reached.",
-                detail=str(exc),
-            ) from exc
-        if info.get("_type") == "playlist":
-            raise InvalidSourceError("Please paste a link to a single video.")
-        title = (info.get("title") or "untitled").strip()
-        log.info("downloading %r (%.1f min)", title, (info.get("duration") or 0) / 60)
-        total = info.get("duration") or 0
-        if total and total > MAX_DURATION_SECONDS:
-            raise SourceTooLongError(
-                "That video is too long.",
-                detail=f"{total // 60} min (limit {MAX_DURATION_SECONDS // 60} min)",
-            )
-        raw = workdir / f"{info.get('id', 'audio')}.m4a"
-        fmt = "140/bestaudio[ext=m4a]/bestaudio/best"
-        try:
-            _run(["yt-dlp", "-f", fmt, "--no-playlist", "-o", str(raw), url])
-        except Exception as exc:
-            raise DownloadError(
-                "The audio could not be downloaded.", detail=str(exc)
-            ) from exc
+def ingest_url(
+    source: str,
+    workdir: Path,
+    *,
+    keep_audio: bool = True,
+    start: float | None = None,
+    duration: float | None = None,
+) -> tuple[Path, str]:
+    """Download a validated YouTube link and decode it to mono WAV."""
+    workdir.mkdir(parents=True, exist_ok=True)
+    import yt_dlp
 
+    url = validate_source(source)
+    try:
+        with yt_dlp.YoutubeDL(dict(YTDLP_OPTIONS)) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception as exc:
+        raise SourceUnavailableError(
+            "That video could not be reached.",
+            detail=str(exc),
+        ) from exc
+
+    title, video_id, total = _inspect_metadata(info)
+    log.info("downloading %r (%.1f min)", title, total / 60)
+    raw = workdir / f"{video_id}.m4a"
+    fmt = "140/bestaudio[ext=m4a]/bestaudio/best"
+    try:
+        _run(
+            [
+                "yt-dlp",
+                "--ignore-config",
+                "--no-playlist",
+                "--no-progress",
+                "--max-filesize", str(MAX_DOWNLOAD_BYTES),
+                "-f", fmt,
+                "-o", str(raw),
+                url,
+            ],
+            timeout=DOWNLOAD_TIMEOUT,
+        )
+    except Exception as exc:
+        raise DownloadError(
+            "The audio could not be downloaded.", detail=str(exc)
+        ) from exc
+
+    wav = _to_wav(
+        raw, workdir, keep_audio=keep_audio, start=start, duration=duration
+    )
+    return wav, title
+
+
+def ingest_file(
+    source: str,
+    workdir: Path,
+    *,
+    keep_audio: bool = True,
+    start: float | None = None,
+    duration: float | None = None,
+) -> tuple[Path, str]:
+    """Decode a local media file (CLI only - never reachable from the web)."""
+    raw = Path(source)
+    if not raw.exists():
+        raise SourceUnavailableError("That file does not exist.", detail=str(raw))
+    return _to_wav(raw, workdir, keep_audio=keep_audio, start=start,
+                   duration=duration), raw.stem
+
+
+def _inspect_metadata(info: dict) -> tuple[str, str, float]:
+    """Validate yt-dlp metadata, returning (title, video_id, duration)."""
+    if info.get("_type") == "playlist":
+        raise InvalidSourceError("Please paste a link to a single video.")
+    if info.get("is_live") or info.get("live_status") in {"is_live", "is_upcoming"}:
+        raise InvalidSourceError("Live streams cannot be transcribed.")
+
+    video_id = str(info.get("id") or "")
+    if not VIDEO_ID_RE.fullmatch(video_id):
+        # The id becomes a filename; anything else could escape the workdir.
+        raise InvalidSourceError("That video has an unexpected identifier.")
+
+    title = (info.get("title") or "untitled").strip()
+    total = info.get("duration")
+    if not isinstance(total, (int, float)) or total <= 0:
+        # A missing duration usually means a live stream or a premiere, and
+        # would otherwise download until the timeout fires.
+        raise InvalidSourceError("That video has no known length.")
+    if total > MAX_DURATION_SECONDS:
+        raise SourceTooLongError(
+            "That video is too long.",
+            detail=f"{int(total) // 60} min (limit {MAX_DURATION_SECONDS // 60} min)",
+        )
+    return title, video_id, float(total)
+
+
+def _to_wav(
+    raw: Path,
+    workdir: Path,
+    *,
+    keep_audio: bool,
+    start: float | None,
+    duration: float | None,
+) -> Path:
+    """Transcode ``raw`` to 44.1 kHz mono PCM WAV inside ``workdir``."""
     wav = workdir / f"{raw.stem}.wav"
     if not wav.exists():
         cmd = [
@@ -207,7 +313,7 @@ def ingest(
         if duration is not None:
             cmd[1:1] = ["-t", str(duration)]
         try:
-            _run(cmd)
+            _run(cmd, timeout=FFMPEG_TIMEOUT)
         except Exception as exc:
             raise DownloadError(
                 "The audio could not be converted.", detail=str(exc)
@@ -216,7 +322,7 @@ def ingest(
     if not keep_audio and raw.exists() and raw.suffix != ".wav":
         raw.unlink(missing_ok=True)
 
-    return wav, title
+    return wav
 
 
 # --------------------------------------------------------------------------- #
@@ -337,21 +443,39 @@ def run_pipeline(
     duration: float | None = None,
     skip_png: bool = False,
     model: str = DEFAULT_MODEL,
+    allow_local: bool = False,
+    max_seconds: int = MAX_JOB_SECONDS,
     progress: ProgressFn | None = None,
 ) -> dict:
-    """Run the whole pipeline and return a report dictionary."""
+    """Run the whole pipeline and return a report dictionary.
+
+    ``allow_local`` opts into reading a local media file instead of a URL; it
+    is reserved for the CLI so that a public request can never name a path.
+    """
     out_root.mkdir(parents=True, exist_ok=True)
     workdir = out_root / "work"
     scoredir = out_root / "score"
     stages: list[StageResult] = []
 
+    deadline = time.monotonic() + max_seconds
+
     def notify(stage: str, pct: int) -> None:
+        if time.monotonic() > deadline:
+            raise TimeoutError_(
+                "This job took too long and was stopped.",
+                detail=f"limit {max_seconds // 60} min",
+            )
         if progress:
             progress(stage, pct)
 
     notify("ingest", 5)
     wav, title = ingest(
-        source, workdir, keep_audio=keep_audio, start=start, duration=duration
+        source,
+        workdir,
+        keep_audio=keep_audio,
+        start=start,
+        duration=duration,
+        allow_local=allow_local,
     )
     stages.append(StageResult("ingest", True, f"{title} -> {wav.name}", [wav]))
 
