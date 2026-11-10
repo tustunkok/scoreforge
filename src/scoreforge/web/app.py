@@ -15,7 +15,6 @@ Routes
 from __future__ import annotations
 
 import os
-import threading
 import time
 from pathlib import Path
 from typing import Annotated
@@ -24,10 +23,21 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from ..abuse import rejections
 from ..errors import InvalidSourceError, ScoreForgeError
 from ..logging_setup import get_logger, setup_logging
 from ..service import ScoreForgeService, Settings
+from .security import (
+    SECURITY_HEADERS,
+    BodySizeLimit,
+    CrossOriginGuard,
+    SlidingWindowLimiter,
+    client_address,
+    csv_list,
+    to_bool,
+)
 
 log = get_logger("web")
 
@@ -54,39 +64,22 @@ def reset_service() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# rate limiting
+# rate limiting and admission control
 # --------------------------------------------------------------------------- #
-class SlidingWindowLimiter:
-    """In-memory sliding-window rate limiter, per client address."""
-
-    def __init__(self, limit: int = 5, window_seconds: float = 3600.0) -> None:
-        self.limit = limit
-        self.window = window_seconds
-        self._hits: dict[str, list[float]] = {}
-        self._lock = threading.Lock()
-
-    def allow(self, key: str) -> bool:
-        now = time.time()
-        with self._lock:
-            hits = [t for t in self._hits.get(key, []) if now - t < self.window]
-            if len(hits) >= self.limit:
-                self._hits[key] = hits
-                return False
-            hits.append(now)
-            self._hits[key] = hits
-            return True
-
-    def remaining(self, key: str) -> int:
-        now = time.time()
-        with self._lock:
-            hits = [t for t in self._hits.get(key, []) if now - t < self.window]
-            return max(0, self.limit - len(hits))
-
-
 limiter = SlidingWindowLimiter(
     limit=int(os.environ.get("SCOREFORGE_RATE_LIMIT", "5")),
     window_seconds=float(os.environ.get("SCOREFORGE_RATE_WINDOW", "3600")),
 )
+
+#: How many submissions may wait at once. The worker is strictly serial, so a
+#: deep queue would keep everyone waiting for hours; refuse instead.
+MAX_QUEUE_DEPTH = int(os.environ.get("SCOREFORGE_MAX_QUEUE_DEPTH", "20"))
+
+#: Only honour X-Forwarded-For when a trusted proxy sets it.
+TRUST_PROXY = to_bool(os.environ.get("SCOREFORGE_TRUST_PROXY"))
+
+#: Host header allow-list; empty means "accept any host" (local development).
+ALLOWED_HOSTS = csv_list(os.environ.get("SCOREFORGE_ALLOWED_HOSTS"))
 
 
 # --------------------------------------------------------------------------- #
@@ -103,6 +96,13 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
         global _service
         _service = service
         _service.start()
+
+    # Added last-to-first by Starlette: the body limit runs before anything
+    # reads the request, then the origin check, then the route handlers.
+    app.add_middleware(CrossOriginGuard)
+    app.add_middleware(BodySizeLimit)
+    if ALLOWED_HOSTS:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 
     static_dir = HERE / "static"
     static_dir.mkdir(parents=True, exist_ok=True)
@@ -132,6 +132,14 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
         )
         return response
 
+    @app.middleware("http")
+    async def _security_headers(request: Request, call_next):
+        """Apply the hardening headers to every response."""
+        response = await call_next(request)
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
+        return response
+
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request, svc: Annotated[ScoreForgeService, Depends(get_service)]):
         return templates.TemplateResponse(
@@ -144,51 +152,63 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
             },
         )
 
+    def _index_error(request: Request, svc: ScoreForgeService, message: str, status: int):
+        """Re-render the submit form with a user-facing error."""
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {
+                "queue": svc.queue_snapshot(),
+                "jobs": svc.list_jobs(limit=20),
+                "error": message,
+            },
+            status_code=status,
+        )
+
     @app.post("/submit")
     def submit(
         request: Request,
         url: Annotated[str, Form()],
         svc: Annotated[ScoreForgeService, Depends(get_service)],
     ):
-        client = request.client.host if request.client else "unknown"
+        client = client_address(request, trust_forwarded=TRUST_PROXY)
+        user_agent = request.headers.get("user-agent", "")
+
         if not limiter.allow(client):
-            return templates.TemplateResponse(
-                request,
-                "index.html",
-                {
-                    "queue": svc.queue_snapshot(),
-                    "jobs": svc.list_jobs(limit=20),
-                    "error": (
-                        "Too many submissions from this address. "
-                        "Please try again later."
-                    ),
-                },
-                status_code=429,
+            rejections.record(
+                client=client, reason="rate-limited", value=url, user_agent=user_agent
             )
+            return _index_error(
+                request,
+                svc,
+                "Too many submissions from this address. Please try again later.",
+                429,
+            )
+
+        if svc.queue_snapshot()["counts"]["queued"] >= MAX_QUEUE_DEPTH:
+            rejections.record(
+                client=client, reason="queue-full", value=url, user_agent=user_agent
+            )
+            return _index_error(
+                request,
+                svc,
+                "The queue is full right now. Please try again in a little while.",
+                503,
+            )
+
         try:
             job = svc.submit(url)
         except InvalidSourceError as exc:
-            return templates.TemplateResponse(
-                request,
-                "index.html",
-                {
-                    "queue": svc.queue_snapshot(),
-                    "jobs": svc.list_jobs(limit=20),
-                    "error": exc.message,
-                },
-                status_code=400,
+            rejections.record(
+                client=client, reason="invalid-source", value=url,
+                user_agent=user_agent,
             )
+            return _index_error(request, svc, exc.message, 400)
         except ScoreForgeError as exc:
-            return templates.TemplateResponse(
-                request,
-                "index.html",
-                {
-                    "queue": svc.queue_snapshot(),
-                    "jobs": svc.list_jobs(limit=20),
-                    "error": str(exc),
-                },
-                status_code=400,
+            rejections.record(
+                client=client, reason="rejected", value=url, user_agent=user_agent
             )
+            return _index_error(request, svc, str(exc), 400)
         return RedirectResponse(f"/job/{job.id}", status_code=303)
 
     @app.get("/job/{job_id}", response_class=HTMLResponse)
