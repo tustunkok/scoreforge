@@ -5,11 +5,12 @@ packaging together. Both the CLI and the web app use it.
 from __future__ import annotations
 
 import shutil
+import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from .errors import ScoreForgeError
+from .errors import ScoreForgeError, StorageFullError
 from .jobs import DONE, EXPIRED, FAILED, Job, JobStore
 from .logging_setup import get_logger
 from .package import build_package
@@ -20,6 +21,12 @@ log = get_logger("service")
 
 #: How long a finished job's artifacts are kept (hours).
 RESULT_TTL_HOURS = 24
+
+#: How often the sweeper runs (seconds).
+SWEEP_INTERVAL_SECONDS = 15 * 60
+
+#: Refuse new work when the data volume has less free space than this.
+MIN_FREE_BYTES = 1024**3
 
 
 @dataclass
@@ -33,6 +40,9 @@ class Settings:
     keep_audio: bool = False
     result_ttl_hours: int = RESULT_TTL_HOURS
     max_duration_seconds: int = 30 * 60
+    sweep_interval_seconds: int = SWEEP_INTERVAL_SECONDS
+    min_free_bytes: int = MIN_FREE_BYTES
+    max_jobs_on_disk: int = 200
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -47,6 +57,18 @@ class Settings:
             keep_audio=os.environ.get("SCOREFORGE_KEEP_AUDIO", "0") == "1",
             result_ttl_hours=int(
                 os.environ.get("SCOREFORGE_RESULT_TTL_HOURS", str(RESULT_TTL_HOURS))
+            ),
+            sweep_interval_seconds=int(
+                os.environ.get(
+                    "SCOREFORGE_SWEEP_INTERVAL", str(SWEEP_INTERVAL_SECONDS)
+                )
+            ),
+            min_free_bytes=int(
+                os.environ.get("SCOREFORGE_MIN_FREE_MB", str(MIN_FREE_BYTES // 1024**2))
+            )
+            * 1024**2,
+            max_jobs_on_disk=int(
+                os.environ.get("SCOREFORGE_MAX_JOBS_ON_DISK", "200")
             ),
         )
 
@@ -68,13 +90,53 @@ class ScoreForgeService:
         self.store = JobStore(self.settings.db_path)
         self.queue = JobQueue(self.store, self.settings.jobs_dir)
         self.queue.set_handler(self._handle)
+        self._sweeper: threading.Thread | None = None
+        self._sweeper_stop = threading.Event()
 
     # -- lifecycle -------------------------------------------------------- #
     def start(self) -> None:
         self.queue.start()
+        if self._sweeper is None or not self._sweeper.is_alive():
+            self._sweeper_stop.clear()
+            self._sweeper = threading.Thread(
+                target=self._sweep_loop, name="scoreforge-sweeper", daemon=True
+            )
+            self._sweeper.start()
 
     def stop(self) -> None:
+        self._sweeper_stop.set()
+        if self._sweeper is not None:
+            self._sweeper.join(timeout=5)
+            self._sweeper = None
         self.queue.stop()
+
+    def _sweep_loop(self) -> None:
+        """Expire old results periodically; the queue is useless without it."""
+        while not self._sweeper_stop.is_set():
+            try:
+                removed = self.expire_old_jobs()
+                if removed:
+                    log.info("expired %d old job(s)", removed)
+            except Exception:  # pragma: no cover - housekeeping must not die
+                log.exception("sweeping old jobs failed")
+            self._sweeper_stop.wait(self.settings.sweep_interval_seconds)
+
+    # -- admission -------------------------------------------------------- #
+    def can_accept(self) -> tuple[bool, str]:
+        """Whether there is room on disk for another job."""
+        on_disk = self._artifact_job_count()
+        if on_disk >= self.settings.max_jobs_on_disk:
+            return False, "The server is holding as many scores as it can."
+        free = shutil.disk_usage(self.settings.data_dir).free
+        if free < self.settings.min_free_bytes:
+            return False, "The server is out of disk space right now."
+        return True, ""
+
+    def _artifact_job_count(self) -> int:
+        jobs_dir = self.settings.jobs_dir
+        if not jobs_dir.exists():
+            return 0
+        return sum(1 for entry in jobs_dir.iterdir() if entry.is_dir())
 
     # -- public API ------------------------------------------------------- #
     def submit(self, url: str) -> Job:
@@ -88,6 +150,9 @@ class ScoreForgeService:
         from .pipeline import validate_source
 
         url = validate_source(url)
+        ok, reason = self.can_accept()
+        if not ok:
+            raise StorageFullError(reason)
         video_id = canonical_video_id(url)
         if video_id:
             existing = self.store.find_by_video_id(video_id)
@@ -113,7 +178,7 @@ class ScoreForgeService:
         if job is None:
             return {"error": "not_found"}
         eta = self.queue.eta_for(job_id)
-        payload = job.as_dict()
+        payload = job.public_dict()
         payload["eta"] = eta.as_dict()
         payload["queue_position"] = self.store.queue_position(job_id)
         return payload

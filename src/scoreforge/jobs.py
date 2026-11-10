@@ -107,6 +107,17 @@ class Job:
     def finished(self) -> bool:
         return self.status in TERMINAL
 
+    def public_dict(self) -> dict:
+        """A payload that is safe to hand to an anonymous visitor.
+
+        Absolute server paths stay behind; only the archive size is exposed,
+        because that is all the UI ever shows.
+        """
+        payload = self.as_dict()
+        size = self.artifacts.get("size")
+        payload["artifacts"] = {"size": size} if size else {}
+        return payload
+
     def as_dict(self) -> dict:
         return {
             "id": self.id,

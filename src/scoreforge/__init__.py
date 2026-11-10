@@ -20,6 +20,7 @@ from .errors import (
     ScoreForgeError,
     SourceTooLongError,
     SourceUnavailableError,
+    StorageFullError,
     TimeoutError_,
     TranscriptionError,
 )
@@ -51,6 +52,7 @@ __all__ = [
     "EngravingError",
     "MuseScoreNotFoundError",
     "TimeoutError_",
+    "StorageFullError",
     "__version__",
 ]
 

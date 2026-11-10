@@ -195,8 +195,8 @@ class JobQueue:
         current = self.store.get(self._current) if self._current else None
         return {
             "counts": counts,
-            "current": current.as_dict() if current else None,
-            "queued": [j.as_dict() for j in self.store.queued_jobs()],
+            "current": current.public_dict() if current else None,
+            "queued": [j.public_dict() for j in self.store.queued_jobs()],
             "average_job_seconds": self._average_job_seconds(),
             "uptime_seconds": time.time() - self._started_at,
         }

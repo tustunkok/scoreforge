@@ -71,3 +71,9 @@ class TimeoutError_(ScoreForgeError):
     """A stage exceeded its time budget."""
 
     code = "timeout"
+
+
+class StorageFullError(ScoreForgeError):
+    """The server cannot accept another job right now."""
+
+    code = "storage_full"

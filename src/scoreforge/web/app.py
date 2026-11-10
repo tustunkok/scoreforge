@@ -26,7 +26,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ..abuse import rejections
-from ..errors import InvalidSourceError, ScoreForgeError
+from ..errors import InvalidSourceError, ScoreForgeError, StorageFullError
 from ..logging_setup import get_logger, setup_logging
 from ..service import ScoreForgeService, Settings
 from .security import (
@@ -204,6 +204,12 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
                 user_agent=user_agent,
             )
             return _index_error(request, svc, exc.message, 400)
+        except StorageFullError as exc:
+            rejections.record(
+                client=client, reason="storage-full", value=url,
+                user_agent=user_agent,
+            )
+            return _index_error(request, svc, exc.message, 503)
         except ScoreForgeError as exc:
             rejections.record(
                 client=client, reason="rejected", value=url, user_agent=user_agent
