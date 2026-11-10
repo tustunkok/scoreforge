@@ -52,6 +52,20 @@ fix(queue): count the running job towards the position
 docs(readme): explain the Docker setup
 ```
 
+## Releases
+
+Releases are [semantic](https://semver.org/) and the version is bumped with
+uv, which keeps `pyproject.toml` and `uv.lock` in step:
+
+```bash
+uv version --bump patch      # or minor / major
+git commit -am "chore(release): 1.2.3"
+git tag v1.2.3 && git push origin master --tags
+```
+
+`scoreforge.__version__` must match; `tests/test_version.py` guards this, and
+the publish workflow refuses a `v*` tag that disagrees with `pyproject.toml`.
+
 ## A note on models
 
 Do not commit model weights. They are large and carry their own licences

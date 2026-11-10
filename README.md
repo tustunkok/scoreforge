@@ -1,109 +1,141 @@
 # ScoreForge
 
-Turn a piano recording into engraved sheet music.
+**Turn a piano video into engraved sheet music.**
 
-ScoreForge listens to a public YouTube video of a piano performance and
-produces an engraved score: **PDF**, **MusicXML**, **MuseScore project**,
-**MIDI** and page images — packaged in a single zip.
+Paste a public YouTube link; ScoreForge listens to the performance, transcribes
+it and engraves a printable score. You get a **PDF**, **MusicXML**, a
+**MuseScore project**, **MIDI** and page images, packaged in one zip.
 
-> This is a machine-generated *first draft*. Note durations, hand assignment
-> and pedalling are inferred from the audio and are often imperfect.
+[![CI](https://github.com/tustunkok/scoreforge/actions/workflows/ci.yml/badge.svg)](https://github.com/tustunkok/scoreforge/actions/workflows/ci.yml)
+[![Publish image](https://github.com/tustunkok/scoreforge/actions/workflows/publish.yml/badge.svg)](https://github.com/tustunkok/scoreforge/actions/workflows/publish.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
+[![Docker image](https://img.shields.io/badge/ghcr.io-scoreforge-2496ed?logo=docker&logoColor=white)](https://github.com/tustunkok/scoreforge/pkgs/container/scoreforge)
+[![Semantic Versioning](https://img.shields.io/badge/versioning-semver-informational.svg)](https://semver.org/)
+
+![The ScoreForge start page](docs/index.jpg)
+
+---
+
+## Why
+
+Turning a recording into notation is fiddly: you need an audio frontend that
+finds the notes, a model that decides which hand played what and how long each
+note lasts, and an engraver that produces something you can actually read.
+ScoreForge wires those stages together behind one command and one small web
+app, and keeps the intermediate files so you can inspect every step.
+
+> **It is a machine-generated first draft.** Note durations, hand assignment
+> and pedalling are inferred from the audio and are frequently imperfect,
+> especially with pedal-heavy playing. Expect to fix things in MuseScore.
+
+![A finished job with the download button and a page preview](docs/job.jpg)
+
+## What you get
+
+| Artifact | Why you want it |
+|---|---|
+| `*.pdf` | print it, or read it on a tablet |
+| `*.musicxml` | the exchange format - open it in any notation app |
+| `*.mscz` | the MuseScore project, ready to edit |
+| `*.mid` | the notated performance, for a DAW or a synth |
+| `page-*.png` | page images, for a quick look or a web page |
 
 ## How it works
 
 ```
 YouTube URL
-   │  yt-dlp
+   │  yt-dlp                  download, size- and length-capped
    ▼
  audio (44.1 kHz mono)
-   │  Transkun V2        (audio  → performance MIDI)
+   │  Transkun V2             audio      → performance MIDI
    ▼
  performance MIDI
-   │  DuET               (MIDI   → MusicXML + score MIDI)
+   │  DuET                    MIDI       → MusicXML + score MIDI
    ▼
  MusicXML
-   │  MuseScore 4        (notation → PDF / MSCZ / PNG pages)
+   │  MuseScore 4             notation   → PDF / MSCZ / PNG pages
    ▼
  scoreforge-<title>.zip
 ```
 
-## Install
+Every stage reports progress, so the web UI can show a percentage, the current
+stage and a time estimate instead of a spinner.
+
+## Quick start
+
+Requirements: **Python 3.11+**, [uv](https://docs.astral.sh/uv/), `ffmpeg`,
+`yt-dlp` and **MuseScore 4** (GPL - install it yourself from
+[musescore.org/download](https://musescore.org/download); set
+`SCOREFORGE_MUSESCORE` if it is not on the default path).
 
 ```bash
 git clone https://github.com/tustunkok/scoreforge.git
 cd scoreforge
 uv sync --extra web
+uv run scoreforge doctor          # checks every dependency, in order
 ```
 
-MuseScore 4 must be installed separately (it is GPL and not redistributed
-here). Point `SCOREFORGE_MUSESCORE` at the executable if it is not in a
-standard location.
-
-Check your environment:
+Convert a single video:
 
 ```bash
-uv run scoreforge doctor
+uv run scoreforge convert https://youtu.be/ZOaFiTStPt4 -o out
 ```
 
-## Use
-
-Convert one video:
+Or run the web app:
 
 ```bash
-uv run scoreforge convert https://youtu.be/VIDEO_ID -o out
+uv run scoreforge serve --host 127.0.0.1 --port 8000
 ```
 
-Run the web application:
+The server handles **one job at a time** - transcription is CPU bound, and
+running several in parallel only makes every one of them slower. The queue is
+persistent (SQLite), so a restart does not lose submissions, and the job page
+shows the position and an ETA. Submitting the same video again while its result
+is still alive returns the existing job.
 
-```bash
-uv run scoreforge serve --host 0.0.0.0 --port 8000
-```
+### Configuration
 
-The web app queues submissions and processes **one job at a time**; the job
-page shows the stage, the queue position and an ETA.
+Every setting has an environment variable; all of them are optional.
 
-Submitting the same video twice while the result is still alive returns the
-existing job instead of transcribing it again - links that differ only in
-their shape (`youtu.be/ID`, `watch?v=ID`, `/shorts/ID`) are recognised as
-the same video.
-
-## Logging
-
-Everything from `DEBUG` to `CRITICAL` is logged to stdout. Choose the level
-with `SCOREFORGE_LOG_LEVEL`:
-
-```bash
-SCOREFORGE_LOG_LEVEL=DEBUG uv run scoreforge serve
-```
-
-Set `SCOREFORGE_LOG_FILE` to also write to a rotating log file.
+| Variable | Default | Meaning |
+|---|---|---|
+| `SCOREFORGE_DATA_DIR` | `data` | jobs, artifacts and the SQLite file |
+| `SCOREFORGE_DEVICE` | `cpu` | `cpu` or `cuda` |
+| `SCOREFORGE_LOG_LEVEL` | `INFO` | `DEBUG` … `CRITICAL` |
+| `SCOREFORGE_LOG_FILE` | - | also write to a rotating file |
+| `SCOREFORGE_RESULT_TTL_HOURS` | `24` | how long a finished result survives |
+| `SCOREFORGE_RATE_LIMIT` / `_RATE_WINDOW` | `5` / `3600` | submissions per client per window |
+| `SCOREFORGE_MAX_QUEUE_DEPTH` | `20` | refuse work beyond this backlog |
+| `SCOREFORGE_MAX_JOBS_ON_DISK` | `200` | storage cap for retained jobs |
+| `SCOREFORGE_MIN_FREE_MB` | `1024` | stop accepting work below this free space |
+| `SCOREFORGE_TRUST_PROXY` | off | honour `X-Forwarded-For` (proxy only) |
+| `SCOREFORGE_ALLOWED_HOSTS` | any | comma-separated `Host` allow-list |
 
 ## Docker
 
-The image is published to `ghcr.io/tustunkok/scoreforge` on every push to
-`master`:
+A multi-arch image is published to
+[`ghcr.io/tustunkok/scoreforge`](https://github.com/tustunkok/scoreforge/pkgs/container/scoreforge)
+on every push to `master`, tagged `latest`, with the release version and with
+the short commit SHA:
 
 ```bash
 docker compose pull && docker compose up -d
+curl http://localhost:8766/healthz      # {"status":"ok","version":"1.0.0"}
 ```
 
-or build it yourself:
+The image bundles ffmpeg and MuseScore 4 and bakes in the model weights, so a
+restart costs nothing. To build it yourself:
 
 ```bash
 docker compose build
 ```
 
-The image bundles ffmpeg and MuseScore 4; model weights are baked in so
-restarts are fast. The container listens on port **8766**.
-
-```bash
-curl http://localhost:8766/healthz
-```
-
 ## Running it publicly
 
-The service has no accounts, so the input path is deliberately narrow. Only
-two link shapes are accepted:
+There are no accounts and no cookies, so the input path is deliberately narrow.
+
+**Only two link shapes are accepted:**
 
 ```
 https://youtu.be/ZOaFiTStPt4
@@ -111,34 +143,72 @@ https://www.youtube.com/watch?v=ZOaFiTStPt4
 ```
 
 Everything else - other hosts, `http://`, Shorts, playlists, extra query
-parameters, private or live videos - is rejected and the raw input is written
-to the `scoreforge.abuse` log (one line per client per minute, so a hostile
-client cannot flood the log).
+parameters, private, live or over-long videos - is rejected. The raw value is
+written to the `scoreforge.abuse` log, aggregated to **one line per client per
+minute** so that a hostile client cannot flood the log.
 
-The public build also:
+On top of that the public build:
 
-* limits request bodies to 2 KB and refuses cross-site form posts;
-* rate-limits submissions per client address and caps the queue depth;
-* refuses new work when the data volume is low on space, and deletes results
-  after `SCOREFORGE_RESULT_TTL_HOURS`;
+* limits request bodies to 2 KB, refuses cross-site form posts and sets a
+  strict CSP with `frame-ancestors 'none'`;
+* rate-limits submissions per client address, caps the queue depth, and
+  refuses work when the data volume is short on space;
+* downloads with `--max-filesize` and hard timeouts, and rejects live streams
+  and sources whose length is unknown;
+* never runs a user-supplied local path (only the CLI may name a file);
 * runs as UID 10001 with a read-only root filesystem, no capabilities and
   `no-new-privileges`.
 
-Set `SCOREFORGE_TRUST_PROXY=1` **only** when a reverse proxy sets
-`X-Forwarded-For`; otherwise the header is ignored and every client looks like
-the proxy. Set `SCOREFORGE_ALLOWED_HOSTS` to your domain so that a poisoned
-`Host` header cannot be used against you.
+Set `SCOREFORGE_TRUST_PROXY=1` **only** behind a reverse proxy that sets
+`X-Forwarded-For`; otherwise every client looks like the proxy. Set
+`SCOREFORGE_ALLOWED_HOSTS` to your domain so a poisoned `Host` header cannot be
+used against you.
+
+## HTTP API
+
+| Route | Purpose |
+|---|---|
+| `GET /` | submit form, queue and recent jobs |
+| `POST /submit` | queue a video (`url` form field) |
+| `GET /job/{id}` | status, ETA and preview |
+| `GET /download/{id}` | the zip archive |
+| `GET /preview/{id}` | first engraving page as JPEG |
+| `GET /api/jobs` | queue snapshot as JSON |
+| `GET /api/job/{id}` | one job as JSON |
+| `GET /healthz` | liveness probe, includes the version |
+
+## Development
+
+```bash
+uv sync --extra web --extra dev
+uv run pytest -q          # 116 tests
+uv run ruff check .
+```
+
+The project is developed test-first; `CONTRIBUTING.md` explains the module
+layout and the commit message style.
+
+## Versioning
+
+Releases follow [Semantic Versioning](https://semver.org/). `pyproject.toml`
+is the source of truth and `scoreforge.__version__` mirrors it; a test fails if
+they ever disagree.
+
+```bash
+uv version --bump patch     # 1.0.0 → 1.0.1  (updates pyproject.toml + uv.lock)
+git commit -am "chore(release): 1.0.1"
+git tag v1.0.1 && git push origin master --tags
+```
+
+A `v*` tag whose number does not match `pyproject.toml` fails the publish
+workflow, so the image tag can never disagree with the code it was built from.
 
 ## Licensing
 
-* ScoreForge's own code: **MIT**.
-* The notation model [DuET](https://github.com/wei-zeng98/DuET) is MIT for the
-  code but its **weights are CC BY-NC 4.0**.
-* The audio frontend [Transkun](https://github.com/Yujia-Yan/Transkun) is MIT.
+* ScoreForge's own code: **MIT** - see [LICENSE](LICENSE).
+* [DuET](https://github.com/wei-zeng98/DuET) (notation): MIT code, but its
+  **weights are CC BY-NC 4.0**.
+* [Transkun](https://github.com/Yujia-Yan/Transkun) (audio frontend): MIT.
 
 Because of the weights' non-commercial terms, **output is for personal,
-non-commercial use only**. See `NOTICE.md`.
-
-## Licence
-
-MIT — see `LICENSE`.
+non-commercial use only**. Details in [NOTICE.md](NOTICE.md).
