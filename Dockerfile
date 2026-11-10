@@ -12,7 +12,8 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     HF_HOME=/opt/models \
-    SCOREFORGE_DATA_DIR=/data
+    SCOREFORGE_DATA_DIR=/data \
+    HOME=/data/home
 
 # --- system dependencies -------------------------------------------------- #
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -100,9 +101,20 @@ from huggingface_hub import snapshot_download;\
 snapshot_download('Wayne42/DuET', allow_patterns=['config.json','model.safetensors']);\
 print('model cached')"
 
+# --- runtime user --------------------------------------------------------- #
+# The service is public, so it never runs as root. Everything the process
+# writes (job artifacts, the SQLite file, yt-dlp and MuseScore caches) lives
+# under $HOME=/data/home or /data.
+RUN useradd --create-home --home-dir /data/home --uid 10001 \
+        --shell /usr/sbin/nologin scoreforge \
+    && mkdir -p /data/home /data/jobs \
+    && chown -R scoreforge:scoreforge /data /opt/models
+
 # --- application ---------------------------------------------------------- #
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH=/app/src
+
+USER scoreforge
 
 EXPOSE 8000
 VOLUME ["/data"]
@@ -110,4 +122,5 @@ VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz').status==200 else 1)"
 
-CMD ["uvicorn", "scoreforge.web.asgi:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "scoreforge.web.asgi:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--no-server-header"]

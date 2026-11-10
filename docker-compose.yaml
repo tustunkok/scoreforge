@@ -16,9 +16,29 @@ services:
       SCOREFORGE_DEVICE: cpu
       SCOREFORGE_RATE_LIMIT: "5"
       SCOREFORGE_RATE_WINDOW: "3600"
+      SCOREFORGE_MAX_QUEUE_DEPTH: "20"
       SCOREFORGE_RESULT_TTL_HOURS: "24"
+      SCOREFORGE_SWEEP_INTERVAL: "900"
+      SCOREFORGE_MIN_FREE_MB: "1024"
+      SCOREFORGE_MAX_JOBS_ON_DISK: "200"
+      # Set to 1 only behind a reverse proxy that sets X-Forwarded-For:
+      # SCOREFORGE_TRUST_PROXY: "1"
+      # Comma-separated Host allow-list (recommended for a public deployment):
+      # SCOREFORGE_ALLOWED_HOSTS: scoreforge.example.com
       # Uncomment if MuseScore is not on the default path:
       # SCOREFORGE_MUSESCORE: /usr/local/bin/mscore
+    # The service is anonymous, so it runs unprivileged and cannot gain
+    # capabilities even if MuseScore or ffmpeg is subverted.
+    user: "10001:10001"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    tmpfs:
+      - /tmp:size=2g,mode=1777
+      - /data/home:size=256m,mode=1700,uid=10001,gid=10001
     # The transcription is CPU heavy; give it room but do not starve the host.
     deploy:
       resources:
