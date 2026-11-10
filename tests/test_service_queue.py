@@ -59,9 +59,9 @@ def test_queue_reports_the_position_of_each_waiting_job(service):
     # Hold the worker so the queue actually builds up.
     service.queue._handler.release = threading.Event()
 
-    first = service.submit("https://youtu.be/aaa")
-    second = service.submit("https://youtu.be/bbb")
-    third = service.submit("https://youtu.be/ccc")
+    first = service.submit("https://youtu.be/aaaaaaaaaaa")
+    second = service.submit("https://youtu.be/bbbbbbbbbbb")
+    third = service.submit("https://youtu.be/ccccccccccc")
 
     assert service.status(first.id)["queue_position"] == 1
     assert service.status(second.id)["queue_position"] == 2
@@ -71,7 +71,7 @@ def test_queue_reports_the_position_of_each_waiting_job(service):
 
 
 def test_eta_is_estimated_for_waiting_jobs(service):
-    job = service.submit("https://youtu.be/aaa")
+    job = service.submit("https://youtu.be/aaaaaaaaaaa")
 
     status = service.status(job.id)
     assert status["eta"]["seconds"] is not None
@@ -79,7 +79,7 @@ def test_eta_is_estimated_for_waiting_jobs(service):
 
 
 def test_jobs_run_one_after_another(service):
-    for vid in ("aaa", "bbb", "ccc"):
+    for vid in ("aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"):
         service.submit(f"https://youtu.be/{vid}")
 
     deadline = datetime.now(UTC) + timedelta(seconds=20)
@@ -98,7 +98,7 @@ def test_jobs_run_one_after_another(service):
 
 
 def test_finished_jobs_report_an_eta_of_zero(service):
-    job = service.submit("https://youtu.be/aaa")
+    job = service.submit("https://youtu.be/aaaaaaaaaaa")
     _wait_for(service, job.id, "done")
 
     assert service.status(job.id)["eta"]["seconds"] == 0.0
@@ -110,7 +110,7 @@ def test_artifacts_expire_after_the_ttl(tmp_path):
     svc.queue.set_handler(FakePipeline())
     svc.start()
     try:
-        job = svc.submit("https://youtu.be/aaa")
+        job = svc.submit("https://youtu.be/aaaaaaaaaaa")
         _wait_for(svc, job.id, "done")
 
         # Pretend the job finished a day and a half ago.

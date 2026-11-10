@@ -59,7 +59,7 @@ def test_submitting_a_bad_link_shows_an_error(client):
 
 def test_job_page_shows_the_progress_and_the_queue(client):
     response = client.post(
-        "/submit", data={"url": "https://youtu.be/aaa"}, follow_redirects=True
+        "/submit", data={"url": "https://youtu.be/aaaaaaaaaaa"}, follow_redirects=True
     )
 
     assert response.status_code == 200
@@ -77,7 +77,7 @@ def test_job_page_shows_the_progress_and_the_queue(client):
 
 def test_job_status_is_available_as_json(client):
     response = client.post(
-        "/submit", data={"url": "https://youtu.be/aaa"}, follow_redirects=False
+        "/submit", data={"url": "https://youtu.be/aaaaaaaaaaa"}, follow_redirects=False
     )
     job_id = response.headers["location"].rsplit("/", 1)[-1]
 

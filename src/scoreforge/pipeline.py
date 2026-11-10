@@ -14,6 +14,7 @@ model weights are loaded once per worker and reused across jobs.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import threading
@@ -114,37 +115,37 @@ def _run(cmd: list[str], *, timeout: int | None = None) -> subprocess.CompletedP
     )
 
 
+#: The only source formats accepted by the public service.  Keeping this
+#: intentionally narrow prevents arbitrary URL fetching (SSRF) and avoids
+#: accepting alternate YouTube surfaces such as playlists and Shorts.
+YOUTUBE_SOURCE_RE = re.compile(
+    r"https://(?:youtu\.be/[A-Za-z0-9_-]{11}"
+    r"|www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11})"
+)
+
+
 def validate_source(source: str) -> str:
-    """Reject anything that is not a plain YouTube video link.
+    """Validate and return an exact, supported YouTube video URL.
 
-    Only public videos on youtube.com / youtu.be are accepted, which keeps
-    the service away from arbitrary URL fetching (SSRF).
+    Only these two forms are accepted::
+
+        https://youtu.be/ZOaFiTStPt4
+        https://www.youtube.com/watch?v=ZOaFiTStPt4
+
+    Every rejection is logged with the raw input so that abuse attempts are
+    visible in the service logs.
     """
-    from urllib.parse import urlparse
-
-    source = (source or "").strip()
-    if not source:
-        raise InvalidSourceError("No link was provided.")
-    if not source.startswith(("http://", "https://")):
-        source = "https://" + source
-    parsed = urlparse(source)
-    host = (parsed.hostname or "").lower()
-    if host in {"youtu.be"}:
-        if not parsed.path.strip("/"):
-            raise InvalidSourceError("That YouTube link has no video id.")
-        return source
-    if host in {"youtube.com", "m.youtube.com", "music.youtube.com", "www.youtube.com"}:
-        if parsed.path.startswith(("/playlist", "/channel", "/@", "/results", "/feed")):
-            raise InvalidSourceError(
-                "Please paste a link to a single video, not a playlist or channel."
-            )
-        if "v=" in (parsed.query or "") or parsed.path.startswith("/shorts/"):
-            return source
-        raise InvalidSourceError("That does not look like a YouTube video link.")
-    raise InvalidSourceError(
-        "Only YouTube links are supported.",
-        detail=f"host was {host or 'unknown'}",
-    )
+    value = source if isinstance(source, str) else ""
+    if not YOUTUBE_SOURCE_RE.fullmatch(value):
+        # ``%r`` escapes control characters and prevents a submitted URL from
+        # forging additional log lines.
+        log.warning("rejected invalid source URL: %r", value)
+        raise InvalidSourceError(
+            "Use a YouTube link in the form "
+            "https://youtu.be/VIDEO_ID or "
+            "https://www.youtube.com/watch?v=VIDEO_ID."
+        )
+    return value
 
 
 def ingest(
