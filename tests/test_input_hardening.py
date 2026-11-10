@@ -163,6 +163,25 @@ def test_hardening_headers_are_present(client, path):
         assert response.headers[name] == value
 
 
+def test_refusals_are_still_hardened(client):
+    """A 413/403 must not be the one response without security headers."""
+    big = client.post(
+        "/submit",
+        content=b"url=" + b"A" * (MAX_BODY_BYTES + 1),
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    cross = client.post(
+        "/submit",
+        data={"url": VALID},
+        headers={"sec-fetch-site": "cross-site"},
+        follow_redirects=False,
+    )
+
+    for response in (big, cross):
+        for name, value in SECURITY_HEADERS.items():
+            assert response.headers[name] == value
+
+
 # -- client keying --------------------------------------------------------- #
 def test_forwarded_for_is_ignored_by_default(client, monkeypatch):
     limiter = SlidingWindowLimiter(limit=1)
