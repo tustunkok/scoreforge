@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -44,6 +45,24 @@ log = get_logger("web")
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
+
+
+def _short_time(value: str | None) -> str:
+    """Render a stored ISO timestamp as ``10 Nov, 20:12`` (UTC).
+
+    The store keeps ISO-8601 strings so that nothing depends on the server
+    locale; only the templates need something a person can read.
+    """
+    if not value:
+        return ""
+    try:
+        moment = datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    return moment.strftime("%d %b, %H:%M")
+
+
+templates.env.filters["short_time"] = _short_time
 
 _service: ScoreForgeService | None = None
 

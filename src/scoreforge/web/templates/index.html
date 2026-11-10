@@ -67,7 +67,7 @@
   <ol class="queue-list">
     {% for j in queue.queued %}
     <li><a href="/job/{{ j.id }}">{{ j.title or j.url }}</a>
-        <span class="muted">{{ j.created_at }}</span></li>
+        <span class="muted">{{ j.created_at | short_time }}</span></li>
     {% endfor %}
   </ol>
   {% else %}
@@ -90,7 +90,7 @@
         <td class="cell-title"><a href="/job/{{ j.id }}">{{ j.title or j.url }}</a></td>
         <td><span class="status {{ j.status }}">{{ j.status }}</span></td>
         <td class="muted">{{ j.stage or "-" }}</td>
-        <td class="muted nowrap">{{ j.created_at }}</td>
+        <td class="muted nowrap">{{ j.created_at | short_time }}</td>
         <td class="cell-action">
           {% if j.status == 'done' %}
           <a class="button small" href="/download/{{ j.id }}">Download</a>
