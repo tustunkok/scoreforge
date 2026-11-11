@@ -31,6 +31,10 @@ app, and keeps the intermediate files so you can inspect every step.
 
 ![A finished job with the download button and a page preview](docs/job.jpg)
 
+<sub>A finished job. The preview is the first engraved page of <i>Blue
+Bossa</i>, transcribed from [this
+performance](https://youtu.be/lTpl_6Moo24) — pedalling, dynamics and all.</sub>
+
 ## What you get
 
 | Artifact | Why you want it |
