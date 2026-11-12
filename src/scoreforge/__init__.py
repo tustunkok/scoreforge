@@ -17,6 +17,7 @@ from .errors import (
     EngravingError,
     InvalidSourceError,
     MuseScoreNotFoundError,
+    MuseScoreUnusableError,
     ScoreForgeError,
     SourceTooLongError,
     SourceUnavailableError,
@@ -35,7 +36,7 @@ from .service import ScoreForgeService, Settings
 #: Releases follow `Semantic Versioning <https://semver.org/>`_. The value is
 #: kept in step with ``pyproject.toml`` by ``uv version --bump`` and a test
 #: (``tests/test_version.py``) fails the build if the two ever drift apart.
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 __all__ = [
     "ScoreForgeService",
@@ -56,6 +57,7 @@ __all__ = [
     "TranscriptionError",
     "EngravingError",
     "MuseScoreNotFoundError",
+    "MuseScoreUnusableError",
     "TimeoutError_",
     "StorageFullError",
     "__version__",

@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .errors import MuseScoreUnusableError
 from .logging_setup import get_logger, setup_logging
 
 log = get_logger("cli")
@@ -80,10 +81,17 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         print(f"{tool:12} {'OK  ' + found if found else 'MISSING'}")
         ok = ok and bool(found)
 
+    # Finding the binary proves nothing - a root-owned AppImage extraction is
+    # invisible to the service user - so execute it as well.
     try:
-        from .musescore import find_musescore
+        from .musescore import find_musescore, probe_musescore
 
-        print(f"{'musescore':12} OK  {find_musescore(None)}")
+        path = find_musescore(None)
+        version = probe_musescore(path)
+        print(f"{'musescore':12} OK  {path} ({version})")
+    except MuseScoreUnusableError as exc:
+        print(f"{'musescore':12} BROKEN ({exc})")
+        ok = False
     except Exception as exc:
         print(f"{'musescore':12} MISSING ({exc})")
         ok = False

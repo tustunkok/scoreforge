@@ -67,6 +67,18 @@ class MuseScoreNotFoundError(ScoreForgeError):
     code = "musescore_not_found"
 
 
+class MuseScoreUnusableError(ScoreForgeError):
+    """MuseScore 4 exists but could not be executed.
+
+    The usual cause on Linux is a permissions problem: the AppImage was
+    extracted as root, so an unprivileged service user cannot traverse into
+    ``squashfs-root``. A file can be present and executable and still be
+    impossible to run, which is exactly why ``doctor`` executes it.
+    """
+
+    code = "musescore_unusable"
+
+
 class TimeoutError_(ScoreForgeError):
     """A stage exceeded its time budget."""
 

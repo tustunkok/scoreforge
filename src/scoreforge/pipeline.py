@@ -27,13 +27,14 @@ from .errors import (
     DownloadError,
     EngravingError,
     InvalidSourceError,
+    MuseScoreUnusableError,
     SourceTooLongError,
     SourceUnavailableError,
     TimeoutError_,
     TranscriptionError,
 )
 from .logging_setup import get_logger
-from .musescore import find_musescore
+from .musescore import find_musescore, probe_musescore
 
 log = get_logger("pipeline")
 
@@ -383,6 +384,16 @@ def engrave(
     pdf = outdir / "score.pdf"
     try:
         _run([str(musescore), str(musicxml), "-o", str(pdf)], timeout=600)
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr or ""
+        if "permission denied" in stderr.lower():
+            raise MuseScoreUnusableError(
+                "MuseScore 4 is installed but cannot be executed.",
+                detail=f"{musescore}: permission denied",
+            ) from exc
+        raise EngravingError(
+            "MuseScore could not render the score.", detail=str(exc)
+        ) from exc
     except Exception as exc:
         raise EngravingError(
             "MuseScore could not render the score.", detail=str(exc)
@@ -487,6 +498,10 @@ def run_pipeline(
 
     notify("engrave", 70)
     ms = find_musescore(musescore)
+    # A present-but-unreadable install fails every render identically; check
+    # once, up front, so the job reports a fixable cause instead of a
+    # CalledProcessError from deep inside the engraving stage.
+    probe_musescore(ms)
     pdf, mscz, pages = engrave(ms, musicxml, scoredir, png=not skip_png)
     outputs = [p for p in (pdf, mscz) if p] + pages
     stages.append(StageResult("engrave", True, str(pdf), outputs))
