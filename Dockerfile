@@ -63,6 +63,10 @@ WORKDIR /app
 
 # --- MuseScore 4 ---------------------------------------------------------- #
 # The release tag and the build number inside the file name differ.
+# The AppImage is extracted as root, so squashfs-root and its bin/ come out
+# mode 700. The service user must be able to *traverse* into them, or every
+# render fails with "AppRun: Permission denied" although the file itself is
+# 755 - which is why the recursive chmod below is not optional.
 ARG MUSESCORE_TAG=v4.7.6
 ARG MUSESCORE_BUILD=4.7.6.261022093
 RUN mkdir -p /opt/musescore \
@@ -74,6 +78,7 @@ RUN mkdir -p /opt/musescore \
     && rm -f /tmp/musescore.AppImage \
     && chmod +x /opt/musescore/squashfs-root/AppRun \
         /opt/musescore/squashfs-root/bin/mscore4portable \
+    && chmod -R a+rX /opt/musescore/squashfs-root \
     && printf '%s\n' \
         '#!/bin/sh' \
         '# MuseScore 4 needs a display; a virtual one is enough.' \

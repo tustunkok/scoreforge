@@ -41,6 +41,24 @@ def test_the_service_home_is_writable_by_that_user(dockerfile):
     assert "HOME=/data/home" in dockerfile
 
 
+def test_the_extracted_musescore_is_readable_by_the_service_user(dockerfile):
+    """The AppImage is extracted as root, so squashfs-root lands at mode 700.
+
+    Without a recursive widening chmod the service user cannot even traverse
+    into it, and every render fails with "AppRun: Permission denied" while a
+    mere presence check still reports OK.
+    """
+    assert "chmod -R a+rX /opt/musescore/squashfs-root" in dockerfile
+
+
+def test_the_image_checks_musescore_actually_runs(dockerfile):
+    """`doctor` must execute the binary, not just look at it."""
+    cli = (ROOT / "src" / "scoreforge" / "cli.py").read_text(encoding="utf-8")
+
+    assert "probe_musescore" in cli
+    assert "BROKEN" in cli
+
+
 def test_compose_runs_the_container_unprivileged(compose):
     service = compose["services"]["scoreforge"]
 
