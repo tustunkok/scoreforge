@@ -15,7 +15,15 @@ uv run pytest
 MuseScore 4 is needed for the PDF/MSCZ output. It is GPL and therefore not
 vendored in this repository; install it from
 [musescore.org/download](https://musescore.org/download) and set
-`SCOREFORGE_MUSESCORE` if it is not in a standard location.
+`SCOREFORGE_MUSESCORE` if it is not in a standard location. You do not need it
+on the host when you use Docker: the image downloads the official AppImage
+during the build.
+
+Run `uv run scoreforge doctor` after setup. It does not merely look for
+MuseScore - it executes it, because an AppImage extracted as root leaves
+`squashfs-root` at mode 700, which makes a perfectly present binary
+unrunnable for the unprivileged service user (that is exactly how the 1.0.1
+fix was found). A broken install is reported as `BROKEN`, not `OK`.
 
 ## How the code is arranged
 

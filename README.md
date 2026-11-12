@@ -68,16 +68,21 @@ stage and a time estimate instead of a spinner.
 
 ## Quick start
 
-Requirements: **Python 3.11+**, [uv](https://docs.astral.sh/uv/), `ffmpeg`,
-`yt-dlp` and **MuseScore 4** (GPL - install it yourself from
-[musescore.org/download](https://musescore.org/download); set
-`SCOREFORGE_MUSESCORE` if it is not on the default path).
+Requirements for a local checkout: **Python 3.11+**,
+[uv](https://docs.astral.sh/uv/), `ffmpeg`, `yt-dlp` and **MuseScore 4**.
+The first four come from your package manager; MuseScore 4 is GPL, so it is not
+committed to this repository - install it from
+[musescore.org/download](https://musescore.org/download) and set
+`SCOREFORGE_MUSESCORE` if it is not in a standard location.
+
+**Using Docker? You do not need to install anything** - the image already
+contains ffmpeg and MuseScore 4 (see [Docker](#docker)).
 
 ```bash
 git clone https://github.com/tustunkok/scoreforge.git
 cd scoreforge
 uv sync --extra web
-uv run scoreforge doctor          # checks every dependency, in order
+uv run scoreforge doctor          # checks every dependency, and *runs* MuseScore
 ```
 
 Convert a single video:
@@ -118,18 +123,25 @@ Every setting has an environment variable; all of them are optional.
 
 ## Docker
 
-A multi-arch image is published to
+A Linux **amd64** image is published to
 [`ghcr.io/tustunkok/scoreforge`](https://github.com/tustunkok/scoreforge/pkgs/container/scoreforge)
 on every push to `master`, tagged `latest`, with the release version and with
 the short commit SHA:
 
 ```bash
 docker compose pull && docker compose up -d
-curl http://localhost:8766/healthz      # {"status":"ok","version":"1.0.0"}
+curl http://localhost:8766/healthz      # {"status":"ok","version":"1.0.1"}
 ```
 
 The image bundles ffmpeg and MuseScore 4 and bakes in the model weights, so a
-restart costs nothing. To build it yourself:
+restart costs nothing and there is nothing to install on the host.
+
+> **amd64 only.** MuseScore's official Linux release is an x86_64 AppImage, so
+> the image will not build or run on arm64 hosts - including a 64-bit
+> Raspberry Pi. On such a host, run the app from a source checkout and point
+> `SCOREFORGE_MUSESCORE` at a MuseScore build of your own.
+
+To build it yourself:
 
 ```bash
 docker compose build
@@ -185,7 +197,7 @@ used against you.
 
 ```bash
 uv sync --extra web --extra dev
-uv run pytest -q          # 116 tests
+uv run pytest -q          # 130 tests
 uv run ruff check .
 ```
 
@@ -199,9 +211,9 @@ is the source of truth and `scoreforge.__version__` mirrors it; a test fails if
 they ever disagree.
 
 ```bash
-uv version --bump patch     # 1.0.0 → 1.0.1  (updates pyproject.toml + uv.lock)
-git commit -am "chore(release): 1.0.1"
-git tag v1.0.1 && git push origin master --tags
+uv version --bump patch     # 1.0.1 → 1.0.2  (updates pyproject.toml + uv.lock)
+git commit -am "chore(release): 1.0.2"
+git tag v1.0.2 && git push origin master --tags
 ```
 
 A `v*` tag whose number does not match `pyproject.toml` fails the publish
