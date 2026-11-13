@@ -120,6 +120,7 @@ Every setting has an environment variable; all of them are optional.
 | `SCOREFORGE_MIN_FREE_MB` | `1024` | stop accepting work below this free space |
 | `SCOREFORGE_TRUST_PROXY` | off | honour `X-Forwarded-For` (proxy only) |
 | `SCOREFORGE_ALLOWED_HOSTS` | any | comma-separated `Host` allow-list |
+| `SCOREFORGE_PUBLIC_ORIGIN` | - | public origin(s) accepted for form posts behind a proxy |
 
 ## Docker
 
@@ -130,7 +131,7 @@ the short commit SHA:
 
 ```bash
 docker compose pull && docker compose up -d
-curl http://localhost:8766/healthz      # {"status":"ok","version":"1.0.1"}
+curl http://localhost:8766/healthz      # {"status":"ok","version":"1.0.2"}
 ```
 
 The image bundles ffmpeg and MuseScore 4 and bakes in the model weights, so a
@@ -166,7 +167,9 @@ minute** so that a hostile client cannot flood the log.
 On top of that the public build:
 
 * limits request bodies to 2 KB, refuses cross-site form posts and sets a
-  strict CSP with `frame-ancestors 'none'`;
+  strict CSP with `frame-ancestors 'none'`
+  ([behind a reverse proxy](#behind-a-reverse-proxy), set
+  `SCOREFORGE_PUBLIC_ORIGIN` or form posts are refused);
 * rate-limits submissions per client address, caps the queue depth, and
   refuses work when the data volume is short on space;
 * downloads with `--max-filesize` and hard timeouts, and rejects live streams
@@ -193,11 +196,29 @@ used against you.
 | `GET /api/job/{id}` | one job as JSON |
 | `GET /healthz` | liveness probe, includes the version |
 
+### Behind a reverse proxy
+
+The cross-site guard compares the browser's `Origin` with the `Host` header.
+A proxy usually rewrites `Host` to an internal name, so tell ScoreForge what
+public origin(s) to accept, and enable the forwarded client address at the same
+time:
+
+```yaml
+environment:
+  SCOREFORGE_PUBLIC_ORIGIN: https://scores.example.com
+  SCOREFORGE_ALLOWED_HOSTS: scores.example.com
+  SCOREFORGE_TRUST_PROXY: "1"
+```
+
+Only set `SCOREFORGE_TRUST_PROXY` when a proxy you control sets
+`X-Forwarded-For`; otherwise a client could choose its own rate-limit bucket.
+Direct deployments (no proxy) need none of these.
+
 ## Development
 
 ```bash
 uv sync --extra web --extra dev
-uv run pytest -q          # 130 tests
+uv run pytest -q          # 134 tests
 uv run ruff check .
 ```
 
@@ -211,9 +232,9 @@ is the source of truth and `scoreforge.__version__` mirrors it; a test fails if
 they ever disagree.
 
 ```bash
-uv version --bump patch     # 1.0.1 → 1.0.2  (updates pyproject.toml + uv.lock)
-git commit -am "chore(release): 1.0.2"
-git tag v1.0.2 && git push origin master --tags
+uv version --bump patch     # 1.0.2 → 1.0.3  (updates pyproject.toml + uv.lock)
+git commit -am "chore(release): 1.0.3"
+git tag v1.0.3 && git push origin master --tags
 ```
 
 A `v*` tag whose number does not match `pyproject.toml` fails the publish

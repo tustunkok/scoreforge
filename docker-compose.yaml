@@ -25,6 +25,9 @@ services:
       # SCOREFORGE_TRUST_PROXY: "1"
       # Comma-separated Host allow-list (recommended for a public deployment):
       # SCOREFORGE_ALLOWED_HOSTS: scoreforge.example.com
+      # Public origin(s) of the site, needed behind a reverse proxy that
+      # rewrites Host - otherwise form posts are refused as cross-site:
+      # SCOREFORGE_PUBLIC_ORIGIN: https://scoreforge.example.com
       # Uncomment if MuseScore is not on the default path:
       # SCOREFORGE_MUSESCORE: /usr/local/bin/mscore
     # The service is anonymous, so it runs unprivileged and cannot gain
