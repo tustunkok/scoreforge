@@ -38,7 +38,11 @@ SECURITY_HEADERS = {
         "frame-ancestors 'none'; base-uri 'none'; object-src 'none'"
     ),
     "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer",
+    # NOT "no-referrer": per the Fetch spec a no-referrer request serialises
+    # its Origin as the literal string "null", which made the browser's own
+    # form post look cross-site to CrossOriginGuard. This policy still strips
+    # the path and query from cross-origin referrers.
+    "Referrer-Policy": "strict-origin-when-cross-origin",
     "X-Frame-Options": "DENY",
     "Cross-Origin-Opener-Policy": "same-origin",
 }
@@ -135,8 +139,22 @@ class CrossOriginGuard:
     through - they are the rate limiter's problem.
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(
+        self, app: ASGIApp, *, extra_origins: frozenset[str] = frozenset()
+    ) -> None:
         self.app = app
+        # Behind a reverse proxy the Host header is often the internal name
+        # while Origin carries the public one; name the public origins
+        # explicitly rather than trusting the Host header.
+        self.extra_origins = frozenset(
+            origin.lower().rstrip("/") for origin in extra_origins
+        )
+
+    def _origin_ok(self, origin: bytes, host: bytes) -> bool:
+        if _same_origin(origin, host):
+            return True
+        text = origin.decode("latin-1").strip().lower().rstrip("/")
+        return text in self.extra_origins
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or scope.get("method") not in STATE_CHANGING:
@@ -145,17 +163,20 @@ class CrossOriginGuard:
 
         headers = {k.lower(): v for k, v in scope.get("headers", [])}
         site = headers.get(b"sec-fetch-site")
+        origin = headers.get(b"origin")
         if site is not None:
             if site.strip().lower() not in {
                 value.encode() for value in SAME_SITE_VALUES
             }:
                 await _refuse(send, "Cross-site submissions are not allowed.")
                 return
-        else:
-            origin = headers.get(b"origin")
-            if origin is not None and not _same_origin(origin, headers.get(b"host", b"")):
-                await _refuse(send, "Cross-site submissions are not allowed.")
-                return
+        elif origin is not None and not self._origin_ok(
+            origin, headers.get(b"host", b"")
+        ):
+            # A browser may only omit Sec-Fetch-Site if it is old; then the
+            # Origin header is the sole signal and "null" is not our page.
+            await _refuse(send, "Cross-site submissions are not allowed.")
+            return
 
         await self.app(scope, receive, send)
 
@@ -174,7 +195,10 @@ def _same_origin(origin: bytes, host: bytes) -> bool:
     except Exception:
         return False
     # A literal "null" origin (sandboxed iframe, file://) is not our page.
-    return bool(parsed.netloc) and parsed.netloc.encode("latin-1").lower() == host.lower()
+    return (
+        bool(parsed.netloc)
+        and parsed.netloc.encode("latin-1").lower() == host.lower()
+    )
 
 
 class SlidingWindowLimiter:

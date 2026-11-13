@@ -119,7 +119,10 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
 
     # Added last-to-first by Starlette: the body limit runs before anything
     # reads the request, then the origin check, then the route handlers.
-    app.add_middleware(CrossOriginGuard)
+    app.add_middleware(
+        CrossOriginGuard,
+        extra_origins=frozenset(csv_list(os.environ.get("SCOREFORGE_PUBLIC_ORIGIN"))),
+    )
     app.add_middleware(BodySizeLimit)
     if ALLOWED_HOSTS:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)

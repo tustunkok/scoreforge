@@ -110,6 +110,42 @@ def test_same_origin_submissions_are_allowed(client, site):
     assert response.status_code == 303
 
 
+def test_a_browser_form_post_with_our_referrer_policy_is_allowed(client):
+    """Regression: `Referrer-Policy: no-referrer` makes Chrome send Origin: null.
+
+    Under that policy a same-origin form submission serialises its Origin as
+    the literal string "null" (Fetch spec), so the guard refused our own form
+    with "Cross-site submissions are not allowed." The policy must therefore
+    not be "no-referrer", and the fetch metadata alone must be enough.
+    """
+    response = client.post(
+        "/submit",
+        data={"url": VALID},
+        headers={"origin": "null", "sec-fetch-site": "same-origin"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+
+
+def test_the_referrer_policy_does_not_null_the_origin(client):
+    response = client.get("/")
+
+    assert response.headers["referrer-policy"] != "no-referrer"
+
+
+def test_a_null_origin_without_fetch_metadata_is_refused(client):
+    """A sandboxed iframe or a file:// page posts Origin: null too."""
+    response = client.post(
+        "/submit",
+        data={"url": VALID},
+        headers={"origin": "null"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 403
+
+
 def test_foreign_origin_without_fetch_metadata_is_refused(client):
     response = client.post(
         "/submit",
@@ -119,6 +155,29 @@ def test_foreign_origin_without_fetch_metadata_is_refused(client):
     )
 
     assert response.status_code == 403
+
+
+def test_a_configured_public_origin_is_accepted_behind_a_proxy(tmp_path, monkeypatch):
+    """Origin carries the public URL while Host may be the internal one."""
+    svc = ScoreForgeService(Settings(data_dir=tmp_path / "proxy"))
+    monkeypatch.setenv("SCOREFORGE_PUBLIC_ORIGIN", "https://scores.example.com")
+    monkeypatch.setattr(
+        web_app, "limiter", SlidingWindowLimiter(limit=5, window_seconds=3600)
+    )
+    proxy_client = TestClient(
+        create_app(svc), base_url="http://internal:8000"
+    )
+    svc.start = lambda: None
+    response = proxy_client.post(
+        "/submit",
+        data={"url": VALID},
+        headers={"origin": "https://scores.example.com"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    svc.stop()
+    reset_service()
 
 
 def test_own_origin_without_fetch_metadata_is_allowed(client):
