@@ -36,7 +36,7 @@ from .service import ScoreForgeService, Settings
 #: Releases follow `Semantic Versioning <https://semver.org/>`_. The value is
 #: kept in step with ``pyproject.toml`` by ``uv version --bump`` and a test
 #: (``tests/test_version.py``) fails the build if the two ever drift apart.
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 __all__ = [
     "ScoreForgeService",
