@@ -2,6 +2,11 @@
 
 **Turn a piano video into engraved sheet music.**
 
+> ### ▶ [Try it live at **scoreforge.toliga.com**](https://scoreforge.toliga.com)
+>
+> No account, no install: paste a YouTube link and download the finished score
+> a few minutes later. (Shared demo server, so the queue can be busy.)
+
 Paste a public YouTube link; ScoreForge listens to the performance, transcribes
 it and engraves a printable score. You get a **PDF**, **MusicXML**, a
 **MuseScore project**, **MIDI** and page images, packaged in one zip.
@@ -12,6 +17,7 @@ it and engraves a printable score. You get a **PDF**, **MusicXML**, a
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 [![Docker image](https://img.shields.io/badge/ghcr.io-scoreforge-2496ed?logo=docker&logoColor=white)](https://github.com/tustunkok/scoreforge/pkgs/container/scoreforge)
 [![Semantic Versioning](https://img.shields.io/badge/versioning-semver-informational.svg)](https://semver.org/)
+[![Try it live](https://img.shields.io/badge/try_it_live-scoreforge.toliga.com-f2c45c?logo=googlechrome&logoColor=black)](https://scoreforge.toliga.com)
 
 ![The ScoreForge start page](docs/index.jpg)
 
@@ -67,6 +73,15 @@ Every stage reports progress, so the web UI can show a percentage, the current
 stage and a time estimate instead of a spinner.
 
 ## Quick start
+
+**Just want to try it?** Use the hosted demo at
+[scoreforge.toliga.com](https://scoreforge.toliga.com) - nothing to install.
+There is no account and no cookie; the only input accepted is a YouTube link in
+one of the two shapes below, and results are deleted after a day.
+
+To run your own instance, continue below.
+
+### From source
 
 Requirements for a local checkout: **Python 3.11+**,
 [uv](https://docs.astral.sh/uv/), `ffmpeg`, `yt-dlp` and **MuseScore 4**.
