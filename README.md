@@ -85,13 +85,13 @@ To run your own instance, continue below.
 
 Requirements for a local checkout: **Python 3.11+**,
 [uv](https://docs.astral.sh/uv/), `ffmpeg`, `yt-dlp` and **MuseScore 4**.
-The first four come from your package manager; MuseScore 4 is GPL, so it is not
-committed to this repository - install it from
+The first four come from your package manager; MuseScore 4 (GPL) is not a
+Python dependency and not in this repository's history, so install it from
 [musescore.org/download](https://musescore.org/download) and set
 `SCOREFORGE_MUSESCORE` if it is not in a standard location.
 
 **Using Docker? You do not need to install anything** - the image already
-contains ffmpeg and MuseScore 4 (see [Docker](#docker)).
+ships ffmpeg, MuseScore 4 and the model weights (see [Docker](#docker)).
 
 ```bash
 git clone https://github.com/tustunkok/scoreforge.git
@@ -261,6 +261,10 @@ workflow, so the image tag can never disagree with the code it was built from.
 * [DuET](https://github.com/wei-zeng98/DuET) (notation): MIT code, but its
   **weights are CC BY-NC 4.0**.
 * [Transkun](https://github.com/Yujia-Yan/Transkun) (audio frontend): MIT.
+* [MuseScore 4](https://musescore.org) (engraving): **GPL v3**, unmodified and
+  shipped inside the published container image. Its source is available from
+  [musescore.org](https://musescore.org) and the corresponding release tag is
+  pinned in the [Dockerfile](Dockerfile).
 
 Because of the weights' non-commercial terms, **output is for personal,
 non-commercial use only**. Details in [NOTICE.md](NOTICE.md).

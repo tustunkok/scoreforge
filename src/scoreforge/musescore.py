@@ -1,8 +1,10 @@
 """Locating the MuseScore 4 executable.
 
-MuseScore is not redistributable in our images (GPL), so it is installed
-separately: on Linux the official AppImage is mounted at runtime, on Windows
-the official installer is used. We only need to find the binary.
+MuseScore is GPL, so it is never baked into this repository - but the container
+image does ship it: the Dockerfile downloads the official AppImage, extracts it
+to ``/opt/musescore`` and puts a wrapper on ``PATH``. On a bare host you install
+it yourself (Linux AppImage or the Windows installer). Either way we only need
+to find the binary, and then prove it runs.
 """
 
 from __future__ import annotations

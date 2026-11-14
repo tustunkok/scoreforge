@@ -12,12 +12,12 @@ uv sync --extra web --extra dev
 uv run pytest
 ```
 
-MuseScore 4 is needed for the PDF/MSCZ output. It is GPL and therefore not
-vendored in this repository; install it from
+MuseScore 4 is needed for the PDF/MSCZ output. It is GPL, so it is not in this
+repository's history and not a Python dependency; install it from
 [musescore.org/download](https://musescore.org/download) and set
 `SCOREFORGE_MUSESCORE` if it is not in a standard location. You do not need it
-on the host when you use Docker: the image downloads the official AppImage
-during the build.
+on the host when you use Docker: the image downloads the official, unmodified
+AppImage at build time and ships it at `/opt/musescore`.
 
 Run `uv run scoreforge doctor` after setup. It does not merely look for
 MuseScore - it executes it, because an AppImage extracted as root leaves
