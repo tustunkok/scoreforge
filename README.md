@@ -146,7 +146,7 @@ the short commit SHA:
 
 ```bash
 docker compose pull && docker compose up -d
-curl http://localhost:8766/healthz      # {"status":"ok","version":"1.0.2"}
+curl http://localhost:8766/healthz      # {"status":"ok","version":"1.0.3"}
 ```
 
 The image bundles ffmpeg and MuseScore 4 and bakes in the model weights, so a
@@ -269,9 +269,9 @@ is the source of truth and `scoreforge.__version__` mirrors it; a test fails if
 they ever disagree.
 
 ```bash
-uv version --bump patch     # 1.0.2 → 1.0.3  (updates pyproject.toml + uv.lock)
-git commit -am "chore(release): 1.0.3"
-git tag v1.0.3 && git push origin master --tags
+uv version --bump patch     # 1.0.3 → 1.0.4  (updates pyproject.toml + uv.lock)
+git commit -am "chore(release): 1.0.4"
+git tag v1.0.4 && git push origin master --tags
 ```
 
 A `v*` tag whose number does not match `pyproject.toml` fails the publish
