@@ -124,8 +124,16 @@ USER scoreforge
 EXPOSE 8000
 VOLUME ["/data"]
 
+# The probe must send a Host header that SCOREFORGE_ALLOWED_HOSTS accepts,
+# otherwise TrustedHostMiddleware answers 400 and the container is reported
+# unhealthy forever. Use the first allowed host when one is configured.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz').status==200 else 1)"
+    CMD python -c "\
+import os, sys, urllib.request; \
+allowed = [h.strip() for h in os.environ.get('SCOREFORGE_ALLOWED_HOSTS', '').split(',') if h.strip()]; \
+host = allowed[0] if allowed else '127.0.0.1:8000'; \
+req = urllib.request.Request('http://127.0.0.1:8000/healthz', headers={'Host': host}); \
+sys.exit(0 if urllib.request.urlopen(req, timeout=4).status == 200 else 1)"
 
 CMD ["uvicorn", "scoreforge.web.asgi:app", "--host", "0.0.0.0", "--port", "8000", \
      "--no-server-header"]
