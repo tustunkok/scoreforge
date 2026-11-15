@@ -349,3 +349,90 @@ def test_rejection_values_cannot_forge_log_lines(abuse_records):
 
     assert len(abuse_records) == 1
     assert chr(10) not in abuse_records[0].getMessage()
+
+
+# -- submitter visibility -------------------------------------------------- #
+def test_a_submission_logs_the_real_submitter_behind_a_proxy(
+    client, monkeypatch, caplog
+):
+    """Uvicorn's access log prints the proxy's address, so we log the client.
+
+    Without this the only place the submitter's IP appeared was the rejection
+    log, which meant accepted submissions were untraceable behind a proxy.
+    """
+    monkeypatch.setattr(web_app, "TRUST_PROXY", True)
+    records = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    logger = logging.getLogger("scoreforge.web")
+    logger.addHandler(handler)
+    try:
+        client.post(
+            "/submit",
+            data={"url": VALID},
+            headers={"x-forwarded-for": "203.0.113.9, 10.0.0.1"},
+            follow_redirects=False,
+        )
+    finally:
+        logger.removeHandler(handler)
+
+    messages = [record.getMessage() for record in records]
+    assert any("from 203.0.113.9" in message for message in messages)
+
+
+def test_a_submission_ignores_a_spoofed_forwarded_header(client, monkeypatch, caplog):
+    monkeypatch.setattr(web_app, "TRUST_PROXY", False)
+    records = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    logger = logging.getLogger("scoreforge.web")
+    logger.addHandler(handler)
+    try:
+        client.post(
+            "/submit",
+            data={"url": VALID},
+            headers={"x-forwarded-for": "203.0.113.9"},
+            follow_redirects=False,
+        )
+    finally:
+        logger.removeHandler(handler)
+
+    messages = [record.getMessage() for record in records]
+    assert not any("203.0.113.9" in message for message in messages)
+
+
+def test_a_read_request_does_not_log_an_address(client):
+    """Only submissions carry an address; GET noise stays short."""
+    records = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    logger = logging.getLogger("scoreforge.web")
+    logger.addHandler(handler)
+    try:
+        client.get("/")
+    finally:
+        logger.removeHandler(handler)
+
+    messages = [record.getMessage() for record in records]
+    assert any("GET /" in message for message in messages)
+    assert not any(" from " in message for message in messages)
+
+
+def test_the_healthcheck_survives_a_host_allow_list(tmp_path, monkeypatch):
+    """TrustedHostMiddleware 400s a probe that sends 127.0.0.1 as Host.
+
+    The image's HEALTHCHECK therefore has to send an allowed host, or the
+    container is reported unhealthy forever. This pins the app side of it.
+    """
+    monkeypatch.setattr(web_app, "ALLOWED_HOSTS", ["scores.example.com"])
+    svc = ScoreForgeService(Settings(data_dir=tmp_path / "hosts"))
+    svc.start = lambda: None
+    probe_client = TestClient(create_app(svc))
+
+    refused = probe_client.get("/healthz", headers={"host": "127.0.0.1:8000"})
+    allowed = probe_client.get("/healthz", headers={"host": "scores.example.com"})
+
+    assert refused.status_code == 400
+    assert allowed.status_code == 200
+    svc.stop()
+    reset_service()

@@ -33,6 +33,7 @@ from ..logging_setup import get_logger, setup_logging
 from ..service import ScoreForgeService, Settings
 from .security import (
     SECURITY_HEADERS,
+    STATE_CHANGING,
     BodySizeLimit,
     CrossOriginGuard,
     SlidingWindowLimiter,
@@ -149,10 +150,26 @@ def create_app(service: ScoreForgeService | None = None) -> FastAPI:
             )
             raise
         duration_ms = (time.perf_counter() - started) * 1000
-        log.info(
-            "%s %s -> %d (%.0f ms)",
-            request.method, request.url.path, response.status_code, duration_ms,
-        )
+        # Uvicorn's own access log prints the *proxied* peer (the reverse
+        # proxy), so the real submitter has to be logged here, where
+        # client_address() applies the X-Forwarded-For rules.
+        if request.method in STATE_CHANGING:
+            log.info(
+                "%s %s -> %d (%.0f ms) from %s",
+                request.method,
+                request.url.path,
+                response.status_code,
+                duration_ms,
+                client_address(request, trust_forwarded=TRUST_PROXY),
+            )
+        else:
+            log.info(
+                "%s %s -> %d (%.0f ms)",
+                request.method,
+                request.url.path,
+                response.status_code,
+                duration_ms,
+            )
         return response
 
     @app.middleware("http")
