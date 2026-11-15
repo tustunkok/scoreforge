@@ -177,7 +177,24 @@ https://www.youtube.com/watch?v=ZOaFiTStPt4
 Everything else - other hosts, `http://`, Shorts, playlists, extra query
 parameters, private, live or over-long videos - is rejected. The raw value is
 written to the `scoreforge.abuse` log, aggregated to **one line per client per
-minute** so that a hostile client cannot flood the log.
+minute** so that a hostile client cannot flood the log. That line carries the
+submitter's IP address, user agent and the rejected value, so you can see who
+sent what:
+
+```
+WARNING scoreforge.abuse: rejected submission from 203.0.113.9: 'https://...'
+        (reason=invalid-source, user-agent='Mozilla/5.0 ...')
+```
+
+Accepted submissions also record the address, on the request log line:
+
+```
+INFO scoreforge.web: POST /submit -> 303 (107 ms) from 203.0.113.9
+```
+
+The address comes from `X-Forwarded-For` only when
+`SCOREFORGE_TRUST_PROXY=1`, otherwise from the socket peer. Nothing else is
+stored about the submitter: the job keeps the video URL, not the visitor.
 
 On top of that the public build:
 
@@ -229,11 +246,16 @@ Only set `SCOREFORGE_TRUST_PROXY` when a proxy you control sets
 `X-Forwarded-For`; otherwise a client could choose its own rate-limit bucket.
 Direct deployments (no proxy) need none of these.
 
+`SCOREFORGE_ALLOWED_HOSTS` also applies to the container's own health probe, so
+the image sends the first allowed host as its `Host` header. If you set an
+allow-list by hand without Docker, `scoreforge doctor` / `curl` from inside the
+container need the same treatment.
+
 ## Development
 
 ```bash
 uv sync --extra web --extra dev
-uv run pytest -q          # 134 tests
+uv run pytest -q          # 138 tests
 uv run ruff check .
 ```
 
